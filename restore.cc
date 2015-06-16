@@ -34,6 +34,14 @@ class Reader {
     pos_ += sizeof(uint64_t);
     return val;
   }
+
+  const char *GetString() {
+    size_t len = Get();
+    const char *str = &buf_[pos_];
+    pos_ += len + 1;
+    assert(pos_ <= size_);
+    return str;
+  }
 };
 
 }
@@ -50,10 +58,26 @@ int main() {
     void *addr = (void *) reader.Get();
     uintptr_t size = reader.Get();
     uintptr_t prot = reader.Get();
+    const char *filename = reader.GetString();
     uintptr_t file_offset = reader.Get();
-    void *addr2 = mmap(addr, size, prot, MAP_PRIVATE | MAP_FIXED,
-                       mapfile_fd, file_offset);
-    assert(addr2 == addr);
+
+    if (prot & PROT_WRITE) {
+      uintptr_t mapfile_offset = reader.Get();
+      void *addr2 = mmap(addr, size, prot, MAP_PRIVATE | MAP_FIXED,
+                         mapfile_fd, mapfile_offset);
+      assert(addr2 == addr);
+    } else {
+      assert(*filename);
+      int fd = open(filename, O_RDONLY);
+      assert(fd >= 0);
+
+      void *addr2 = mmap(addr, size, prot, MAP_PRIVATE | MAP_FIXED,
+                         fd, file_offset);
+      assert(addr2 == addr);
+
+      int rc = close(fd);
+      assert(rc == 0);
+    }
   }
 
   int rc = close(mapfile_fd);

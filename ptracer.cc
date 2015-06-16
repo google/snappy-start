@@ -142,6 +142,11 @@ class Ptracer {
     printf("%" PRIx64 "\n", val);
   }
 
+  void PutString(const std::string &str) {
+    Put(str.size());
+    fwrite(str.c_str(), str.size() + 1, 1, info_fp_);
+  }
+
   void Dump() {
     FILE *mapfile = fopen("out_pages", "w");
     assert(mapfile);
@@ -160,9 +165,11 @@ class Ptracer {
       Put(map.addr);
       Put(map.size);
       Put(map.prot);
-      Put(mapfile_offset);
+      PutString(map.filename);
+      Put(map.file_offset);
 
       if (map.prot & PROT_WRITE) {
+        Put(mapfile_offset);
         for (uintptr_t offset = 0; offset < map.size;
              offset += sizeof(uintptr_t)) {
           uintptr_t word = ReadWord(map.addr + offset);
