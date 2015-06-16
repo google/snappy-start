@@ -699,9 +699,8 @@ asm(".pushsection \".text\",\"ax\",@progbits\n"
     ".type _start,@function\n"
     "_start:\n"
     "xorq %rbp, %rbp\n"
-    "movq %rsp, %rbx\n"         /* Save starting SP in %rbx.  */
+    "movq %rsp, %rdi\n"         /* Argument: stack block.  */
     "andq $-16, %rsp\n"         /* Align the stack as per ABI.  */
-    "movq %rbx, %rdi\n"         /* Argument: stack block.  */
     "call do_load\n"
     "movq %rax, %rsp\n"         /* Switch to new stack */
     "jmp *-8(%rax)\n"           /* Jump to the entry point. */
