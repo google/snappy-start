@@ -44,6 +44,43 @@ class Reader {
   }
 };
 
+struct RegsToRestore {
+  uint64_t rax, rcx, rdx, rbx, rbp, rsi, rdi;
+  uint64_t r8, r9, r10, r11, r12, r13, r14, r15;
+
+  // Fields used by the instruction "iretq".  We use "ireq" to restore
+  // rip and rsp at the same time.
+  uint64_t rip;
+  uint64_t cs;
+  uint64_t flags;
+  uint64_t rsp;
+  uint64_t ss;
+};
+
+void RestoreRegs(struct RegsToRestore *regs) {
+  asm("mov %%cs, %0" : "=r"(regs->cs));
+  asm("mov %%ss, %0" : "=r"(regs->ss));
+
+  asm("movq %0, %%rsp\n"
+      "popq %%rax\n"
+      "popq %%rcx\n"
+      "popq %%rdx\n"
+      "popq %%rbx\n"
+      "popq %%rbp\n"
+      "popq %%rsi\n"
+      "popq %%rdi\n"
+      "popq %%r8\n"
+      "popq %%r9\n"
+      "popq %%r10\n"
+      "popq %%r11\n"
+      "popq %%r12\n"
+      "popq %%r13\n"
+      "popq %%r14\n"
+      "popq %%r15\n"
+      "iretq\n"
+      : : "r"(regs));
+}
+
 }
 
 int main() {
@@ -51,7 +88,25 @@ int main() {
   int mapfile_fd = open("out_pages", O_RDONLY);
   assert(mapfile_fd >= 0);
 
-  uintptr_t rip = reader.Get();
+  RegsToRestore regs;
+  regs.rax = reader.Get();
+  regs.rcx = reader.Get();
+  regs.rdx = reader.Get();
+  regs.rbx = reader.Get();
+  regs.rsp = reader.Get();
+  regs.rbp = reader.Get();
+  regs.rsi = reader.Get();
+  regs.rdi = reader.Get();
+  regs.r8 = reader.Get();
+  regs.r9 = reader.Get();
+  regs.r10 = reader.Get();
+  regs.r11 = reader.Get();
+  regs.r12 = reader.Get();
+  regs.r13 = reader.Get();
+  regs.r14 = reader.Get();
+  regs.r15 = reader.Get();
+  regs.rip = reader.Get();
+  regs.flags = reader.Get();
 
   int mapping_count = reader.Get();
   for (int i = 0; i < mapping_count; i++) {
@@ -83,8 +138,7 @@ int main() {
   int rc = close(mapfile_fd);
   assert(rc == 0);
 
-  void (*func)() = (void (*)()) rip;
-  func();
-  // Should not return.
-  abort();
+  RestoreRegs(&regs);
+  // Should not reach here.
+  return 1;
 }

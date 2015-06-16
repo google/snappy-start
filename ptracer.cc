@@ -164,7 +164,24 @@ class Ptracer {
     struct user_regs_struct regs;
     int rc = ptrace(PTRACE_GETREGS, pid_, 0, &regs);
     assert(rc == 0);
+    Put(regs.rax);
+    Put(regs.rcx);
+    Put(regs.rdx);
+    Put(regs.rbx);
+    Put(regs.rsp);
+    Put(regs.rbp);
+    Put(regs.rsi);
+    Put(regs.rdi);
+    Put(regs.r8);
+    Put(regs.r9);
+    Put(regs.r10);
+    Put(regs.r11);
+    Put(regs.r12);
+    Put(regs.r13);
+    Put(regs.r14);
+    Put(regs.r15);
     Put(regs.rip);
+    Put(regs.eflags);
 
     Put(mappings_.size());
     for (auto map : mappings_) {
