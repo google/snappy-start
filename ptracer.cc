@@ -11,6 +11,8 @@
 #include <unistd.h>
 
 #include <list>
+#include <map>
+#include <sstream>
 
 
 // This is an example of using ptrace() to log syscalls called by a
@@ -53,12 +55,41 @@ class MmapInfo {
   uintptr_t addr;
   size_t size;
   int prot;
+  std::string filename;
+  uint64_t file_offset;
 };
 
 class Ptracer {
   int pid_;
   std::list<MmapInfo> mappings_;
+  std::map<int, std::string> fds_;
   FILE *info_fp_;
+
+  uintptr_t ReadWord(uintptr_t addr) {
+    errno = 0;
+    uintptr_t value = ptrace(PTRACE_PEEKDATA, pid_, addr, 0);
+    assert(errno == 0);
+    return value;
+  }
+
+  char ReadByte(uintptr_t addr) {
+    uintptr_t mask = sizeof(uintptr_t) - 1;
+    uintptr_t word = ReadWord(addr & ~mask);
+    return word >> ((addr & mask) * 8);
+  }
+
+  std::string ReadString(uintptr_t addr) {
+    // TODO: Reading one byte at a time is inefficient (though reading
+    // one word at a time is not great either).
+    std::stringbuf buf;
+    for (;;) {
+      char ch = ReadByte(addr++);
+      if (!ch)
+        break;
+      buf.sputc(ch);
+    }
+    return buf.str();
+  }
 
  public:
   Ptracer(int pid): pid_(pid) {}
@@ -66,23 +97,40 @@ class Ptracer {
   void HandleSyscall(struct user_regs_struct *regs) {
     uintptr_t sysnum = regs->orig_rax;
     uintptr_t syscall_result = regs->rax;
-    // uintptr_t arg1 = regs->rdi;
+    uintptr_t arg1 = regs->rdi;
     uintptr_t arg2 = regs->rsi;
     uintptr_t arg3 = regs->rdx;
-    uintptr_t arg4 = regs->r10;
+    // uintptr_t arg4 = regs->r10;
     uintptr_t arg5 = regs->r8;
     uintptr_t arg6 = regs->r9;
     printf("syscall=%s (%i)\n", SyscallName(sysnum), (int) sysnum);
 
+    if (syscall_result > -(uintptr_t) 0x1000) {
+      // Syscall returned an error so should have had no effect.
+      return;
+    }
+
     switch (sysnum) {
+      case __NR_open: {
+        std::string filename(ReadString(arg1));
+        printf("open: %s\n", filename.c_str());
+        int fd_result = syscall_result;
+        if (fd_result >= 0)
+          fds_[fd_result] = filename;
+        break;
+      }
       case __NR_mmap: {
         MmapInfo map;
         map.addr = syscall_result;
         map.size = RoundUpPageSize(arg2);
         map.prot = arg3;
-        assert(arg4 == (MAP_ANON | MAP_PRIVATE));
-        assert((int) arg5 == -1);
-        assert(arg6 == 0);
+        // assert(arg4 == (MAP_ANON | MAP_PRIVATE));
+        int fd_arg = arg5;
+        if (fd_arg != -1) {
+          assert(fds_.find(fd_arg) != fds_.end());
+          map.filename = fds_[fd_arg];
+        }
+        map.file_offset = arg6;
         mappings_.push_back(map);
         break;
       }
@@ -114,12 +162,14 @@ class Ptracer {
       Put(map.prot);
       Put(mapfile_offset);
 
-      for (uintptr_t offset = 0; offset < map.size;
-           offset += sizeof(uintptr_t)) {
-        uintptr_t word = ptrace(PTRACE_PEEKDATA, pid_, map.addr + offset, 0);
-        fwrite(&word, sizeof(word), 1, mapfile);
+      if (map.prot & PROT_WRITE) {
+        for (uintptr_t offset = 0; offset < map.size;
+             offset += sizeof(uintptr_t)) {
+          uintptr_t word = ReadWord(map.addr + offset);
+          fwrite(&word, sizeof(word), 1, mapfile);
+        }
+        mapfile_offset += map.size;
       }
-      mapfile_offset += map.size;
     }
     fclose(mapfile);
     fclose(info_fp_);

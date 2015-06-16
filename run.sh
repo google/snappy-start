@@ -17,11 +17,10 @@ ld.bfd -m elf_x86_64 --build-id -static -z max-page-size=0x1000 \
 gcc $cflags hellow.c -o hellow_exec
 gcc $cflags hellow.c -fPIE -pie -o hellow_pie
 
+./elf_loader ./hellow_pie
+./elf_loader ./hellow_exec
+
 ./ptracer ./example_loader
 ./restore
 
-./example_prog
-
-./elf_loader ./hellow_pie
-./elf_loader ./hellow_exec
-./elf_loader ./example_prog
+./ptracer ./elf_loader ./example_prog
