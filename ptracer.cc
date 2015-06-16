@@ -139,7 +139,6 @@ class Ptracer {
 
   void Put(uint64_t val) {
     fwrite(&val, sizeof(val), 1, info_fp_);
-    printf("%" PRIx64 "\n", val);
   }
 
   void PutString(const std::string &str) {
@@ -256,7 +255,6 @@ int main(int argc, char **argv) {
       rc = ptrace(PTRACE_SYSCALL, pid, 0, 0);
       assert(rc == 0);
     } else if (WSTOPSIG(status) == SIGUSR1) {
-      printf("usr1\n");
       ptracer.Dump();
       ptracer.TerminateSubprocess();
       break;
