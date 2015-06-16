@@ -76,6 +76,15 @@ extern char TEXT_START[];
 # pragma GCC optimize("-fno-tree-loop-distribute-patterns")
 #endif
 
+static void my_memcpy(void *dest, const void *src, size_t size) {
+  char *d = dest;
+  const char *s = src;
+  while (size > 0) {
+    *d++ = *s++;
+    size--;
+  }
+}
+
 static void my_bzero(void *buf, size_t n) {
   char *p = buf;
   while (n-- > 0)
@@ -506,6 +515,23 @@ static void ReserveBottomPages(size_t pagesize) {
 }
 
 
+static char *copy_stack_string(uintptr_t *stack_alloc, char *string) {
+  size_t length = my_strlen(string);
+  *stack_alloc -= length + 1;
+  char *dest = (char *) *stack_alloc;
+  my_memcpy(dest, string, length + 1);
+  return dest;
+}
+
+static void copy_stack_strings(uintptr_t *stack_alloc, char **strings,
+                               char **strings_end) {
+  char **p;
+  for (p = strings_end; p > strings; ) {
+    --p;
+    *p = copy_stack_string(stack_alloc, *p);
+  }
+}
+
 /*
  * This is the main loading code.  It's called with the starting stack pointer.
  * This points to a sequence of pointer-size words:
@@ -517,49 +543,68 @@ static void ReserveBottomPages(size_t pagesize) {
  *                      auxv[0].a_type
  *                      auxv[1].a_un.a_val
  *                      ...
- * It returns the dynamic linker's runtime entry point address, where
- * we should jump to.  This is called by the machine-dependent _start
- * code (below).  On return, it restores the original stack pointer
- * and jumps to this entry point.
+ *
+ * This returns the address of the new stack pointer.
  *
  * argv[0] is the uninteresting name of this bootstrap program.  argv[1] is
  * the real program file name we'll open, and also the argv[0] for that
  * program.  We need to modify argc, move argv[1..] back to the argv[0..]
  * position, and also examine and modify the auxiliary vector on the stack.
  */
-ElfW(Addr) do_load(stack_val_t *stack) {
+uintptr_t do_load(stack_val_t *stack) {
   size_t i;
   int argn;
 
-  /*
-   * First find the end of the auxiliary vector.
-   */
   int argc = stack[0];
   char **argv = (char **) &stack[1];
   const char *program = argv[1];
-  char **envp = &argv[argc + 1];
-  char **ep = envp;
-  while (*ep != NULL)
-    ++ep;
-  ElfW(auxv_t) *auxv = (ElfW(auxv_t) *) (ep + 1);
-  ElfW(auxv_t) *av = auxv;
-  while (av->a_type != AT_NULL)
-    ++av;
-  size_t stack_words = (stack_val_t *) (av + 1) - &stack[1];
-
   if (argc < 2)
     fail("Usage", "PROGRAM ARGS...", NULL, 0, NULL, 0);
 
-  /*
-   * Now move everything back to eat our original argv[0].  When we've done
-   * that, envp and auxv will start one word back from where they were.
-   */
+  /* Drop the first argument. */
   --argc;
-  --envp;
-  auxv = (ElfW(auxv_t) *) ep;
+  ++argv;
+  ++stack;
   stack[0] = argc;
-  for (i = 1; i < stack_words; ++i)
-    stack[i] = stack[i + 1];
+
+  /* Find the env vars and the auxiliary vector (auxv). */
+  char **envp = &argv[argc + 1];
+  char **envp_end = envp;
+  while (*envp_end != NULL)
+    ++envp_end;
+  ElfW(auxv_t) *auxv = (ElfW(auxv_t) *) (envp_end + 1);
+  ElfW(auxv_t) *auxv_end = auxv;
+  while (auxv_end->a_type != AT_NULL)
+    ++auxv_end;
+
+  /* Allocate a new stack. */
+  /* TODO: Use a larger stack when ptracer.cc handles it efficiently. */
+  size_t stack_size = 128 << 10;
+  uintptr_t new_stack = my_mmap_simple(0, stack_size, PROT_READ | PROT_WRITE,
+                                       MAP_ANON | MAP_PRIVATE, -1, 0);
+  if ((void *) new_stack == MAP_FAILED)
+    fail("Error", "Failed to map stack", NULL, 0, NULL, 0);
+  /* TODO: Enable the guard page when restore.cc can handle it. */
+  if (0) {
+    /* Map a guard page. */
+    uintptr_t mapping = my_mmap_simple(new_stack, 0x1000, PROT_NONE,
+                                       MAP_ANON | MAP_PRIVATE | MAP_FIXED,
+                                       -1, 0);
+    if (mapping != new_stack)
+      fail("Error", "Failed to map guard page", NULL, 0, NULL, 0);
+  }
+  uintptr_t stack_alloc = new_stack + stack_size;
+
+  /* Copy data to the new stack. */
+  copy_stack_strings(&stack_alloc, envp, envp_end);
+  copy_stack_strings(&stack_alloc, argv, &argv[argc]);
+  size_t stack_words = (stack_val_t *) (auxv_end + 1) - stack;
+  stack_alloc -= sizeof(stack_val_t) * stack_words;
+  for (i = 0; i < stack_words; ++i)
+    ((stack_val_t *) stack_alloc)[i] = stack[i];
+
+  ElfW(auxv_t) *new_auxv =
+    (ElfW(auxv_t) *) ((uintptr_t) auxv - (uintptr_t) stack + stack_alloc);
 
   /*
    * If an argument is the kRDebugTemplate or kReservedAtZeroTemplate
@@ -585,7 +630,8 @@ ElfW(Addr) do_load(stack_val_t *stack) {
   ElfW(auxv_t) *av_phnum = NULL;
   size_t pagesize = 0;
 
-  for (av = auxv;
+  ElfW(auxv_t) *av;
+  for (av = new_auxv;
        (av_base == NULL || av_entry == NULL || av_phdr == NULL ||
         av_phnum == NULL || pagesize == 0);
        ++av) {
@@ -635,7 +681,8 @@ Failed to find AT_BASE, AT_ENTRY, AT_PHDR, AT_PHNUM, or AT_PAGESZ!",
                           NULL, NULL, NULL);
   }
 
-  return entry;
+  ((stack_val_t *) stack_alloc)[-1] = entry;
+  return stack_alloc;
 }
 
 /*
@@ -643,24 +690,10 @@ Failed to find AT_BASE, AT_ENTRY, AT_PHDR, AT_PHNUM, or AT_PAGESZ!",
  * each machine.  The kernel startup protocol is not compatible with the
  * normal C function calling convention.  Here, we call do_load (above)
  * using the normal C convention as per the ABI, with the starting stack
- * pointer as its argument; restore the original starting stack; and
- * finally, jump to the dynamic linker's entry point address.
+ * pointer as its argument; switch to the new stack; and finally, jump to
+ * the dynamic linker's entry point address.
  */
-#if defined(__i386__)
-asm(".pushsection \".text\",\"ax\",@progbits\n"
-    ".globl _start\n"
-    ".type _start,@function\n"
-    "_start:\n"
-    "xorl %ebp, %ebp\n"
-    "movl %esp, %ebx\n"         /* Save starting SP in %ebx.  */
-    "andl $-16, %esp\n"         /* Align the stack as per ABI.  */
-    "pushl %ebx\n"              /* Argument: stack block.  */
-    "call do_load\n"
-    "movl %ebx, %esp\n"         /* Restore the saved SP.  */
-    "jmp *%eax\n"               /* Jump to the entry point.  */
-    ".popsection"
-    );
-#elif defined(__x86_64__)
+#if defined(__x86_64__)
 asm(".pushsection \".text\",\"ax\",@progbits\n"
     ".globl _start\n"
     ".type _start,@function\n"
@@ -670,48 +703,12 @@ asm(".pushsection \".text\",\"ax\",@progbits\n"
     "andq $-16, %rsp\n"         /* Align the stack as per ABI.  */
     "movq %rbx, %rdi\n"         /* Argument: stack block.  */
     "call do_load\n"
-    "movq %rbx, %rsp\n"         /* Restore the saved SP.  */
-    "jmp *%rax\n"               /* Jump to the entry point.  */
-    ".popsection"
-    );
-#elif defined(__arm__)
-asm(".pushsection \".text\",\"ax\",%progbits\n"
-    ".globl _start\n"
-    ".type _start,#function\n"
-    "_start:\n"
-#if defined(__thumb2__)
-    ".thumb\n"
-    ".syntax unified\n"
-#endif
-    "mov fp, #0\n"
-    "mov lr, #0\n"
-    "mov r4, sp\n"              /* Save starting SP in r4.  */
-    "mov r0, sp\n"              /* Argument: stack block.  */
-    "bl do_load\n"
-    "mov sp, r4\n"              /* Restore the saved SP.  */
-    "blx r0\n"                  /* Jump to the entry point.  */
-    ".popsection"
-    );
-#elif defined(__mips__)
-asm(".pushsection \".text\",\"ax\",@progbits\n"
-    ".globl _start\n"
-    ".type _start,@function\n"
-    "_start:\n"
-    ".set noreorder\n"
-    "addiu $fp, $zero, 0\n"
-    "addiu $ra, $zero, 0\n"
-    "addiu $s8, $sp,   0\n"     /* Save starting SP in s8.  */
-    "addiu $a0, $sp,   0\n"
-    "addiu $sp, $sp, -16\n"
-    "jal   do_load\n"
-    "nop\n"
-    "addiu $sp, $s8,  0\n"      /* Restore the saved SP.  */
-    "jr    $v0\n"               /* Jump to the entry point.  */
-    "nop\n"
+    "movq %rax, %rsp\n"         /* Switch to new stack */
+    "jmp *-8(%rax)\n"           /* Jump to the entry point. */
     ".popsection"
     );
 #else
-# error "Need stack-preserving _start code for this architecture!"
+# error "Need _start code for this architecture!"
 #endif
 
 #if defined(__arm__)
