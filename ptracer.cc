@@ -58,6 +58,7 @@ class MmapInfo {
 class Ptracer {
   int pid_;
   std::list<MmapInfo> mappings_;
+  FILE *info_fp_;
 
  public:
   Ptracer(int pid): pid_(pid) {}
@@ -89,6 +90,7 @@ class Ptracer {
   }
 
   void Put(uint64_t val) {
+    fwrite(&val, sizeof(val), 1, info_fp_);
     printf("%" PRIx64 "\n", val);
   }
 
@@ -96,6 +98,16 @@ class Ptracer {
     FILE *mapfile = fopen("out_pages", "w");
     assert(mapfile);
     uintptr_t mapfile_offset = 0;
+
+    info_fp_ = fopen("out_info", "w");
+    assert(info_fp_);
+
+    struct user_regs_struct regs;
+    int rc = ptrace(PTRACE_GETREGS, pid_, 0, &regs);
+    assert(rc == 0);
+    Put(regs.rip);
+
+    Put(mappings_.size());
     for (auto map : mappings_) {
       Put(map.addr);
       Put(map.size);
@@ -110,6 +122,7 @@ class Ptracer {
       mapfile_offset += map.size;
     }
     fclose(mapfile);
+    fclose(info_fp_);
   }
 
   void TerminateSubprocess() {
@@ -175,7 +188,7 @@ int main(int argc, char **argv) {
 
     if (WSTOPSIG(status) == (SIGTRAP | kSysFlag)) {
       if (!syscall_entry) {
-        struct user_regs_struct regs = {};
+        struct user_regs_struct regs;
         rc = ptrace(PTRACE_GETREGS, pid, 0, &regs);
         assert(rc == 0);
         ptracer.HandleSyscall(&regs);
