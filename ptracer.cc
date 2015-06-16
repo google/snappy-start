@@ -119,6 +119,10 @@ class Ptracer {
           fds_[fd_result] = filename;
         break;
       }
+      case __NR_close: {
+        fds_.erase(arg1);
+        break;
+      }
       case __NR_mmap: {
         MmapInfo map;
         map.addr = syscall_result;
@@ -147,6 +151,9 @@ class Ptracer {
   }
 
   void Dump() {
+    // We don't support restoring FDs yet, so no FDs must be left open.
+    assert(fds_.size() == 0);
+
     FILE *mapfile = fopen("out_pages", "w");
     assert(mapfile);
     uintptr_t mapfile_offset = 0;
