@@ -1,13 +1,14 @@
 
+#include <asm/prctl.h>
 #include <assert.h>
 #include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <sys/mman.h>
 #include <sys/ptrace.h>
+#include <sys/syscall.h>
 #include <sys/user.h>
 #include <sys/wait.h>
-#include <sys/syscall.h>
 #include <unistd.h>
 
 #include <list>
@@ -63,6 +64,7 @@ class Ptracer {
   int pid_;
   std::list<MmapInfo> mappings_;
   std::map<int, std::string> fds_;
+  uint64_t fs_segment_base_;
   FILE *info_fp_;
 
   uintptr_t ReadWord(uintptr_t addr) {
@@ -138,6 +140,12 @@ class Ptracer {
         mappings_.push_back(map);
         break;
       }
+      case __NR_arch_prctl: {
+        if (arg1 == ARCH_SET_FS) {
+          fs_segment_base_ = arg2;
+        }
+        break;
+      }
     }
   }
 
@@ -182,6 +190,7 @@ class Ptracer {
     Put(regs.r15);
     Put(regs.rip);
     Put(regs.eflags);
+    Put(fs_segment_base_);
 
     Put(mappings_.size());
     for (auto map : mappings_) {

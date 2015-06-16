@@ -28,4 +28,4 @@ gcc $cflags hellow.c -fPIE -pie -o hellow_pie
 ./restore
 
 ./ptracer ./elf_loader ./example_prog2
-# ./restore
+./restore

@@ -1,10 +1,12 @@
 
+#include <asm/prctl.h>
 #include <assert.h>
 #include <fcntl.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <sys/syscall.h>
 #include <unistd.h>
 
 
@@ -107,6 +109,7 @@ int main() {
   regs.r15 = reader.Get();
   regs.rip = reader.Get();
   regs.flags = reader.Get();
+  uint64_t fs_segment_base = reader.Get();
 
   int mapping_count = reader.Get();
   for (int i = 0; i < mapping_count; i++) {
@@ -136,6 +139,9 @@ int main() {
   }
 
   int rc = close(mapfile_fd);
+  assert(rc == 0);
+
+  rc = syscall(__NR_arch_prctl, ARCH_SET_FS, fs_segment_base);
   assert(rc == 0);
 
   RestoreRegs(&regs);
