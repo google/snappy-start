@@ -1,11 +1,15 @@
 
 #include <assert.h>
+#include <stdint.h>
 #include <stdio.h>
+#include <sys/mman.h>
 #include <sys/ptrace.h>
 #include <sys/user.h>
 #include <sys/wait.h>
 #include <sys/syscall.h>
 #include <unistd.h>
+
+#include <list>
 
 
 // This is an example of using ptrace() to log syscalls called by a
@@ -17,7 +21,7 @@ namespace {
 // the option PTRACE_O_TRACESYSGOOD is enabled.
 const int kSysFlag = 0x80;
 
-const char *syscall_name(int sysnum) {
+const char *SyscallName(int sysnum) {
   switch (sysnum) {
 #define MAP(name) case __NR_##name: return #name;
     MAP(access)
@@ -39,6 +43,44 @@ const char *syscall_name(int sysnum) {
 }
 
 }
+
+class MmapInfo {
+ public:
+  uintptr_t addr;
+  size_t size;
+  int prot;
+};
+
+class Ptracer {
+  std::list<MmapInfo> mappings_;
+
+ public:
+  void HandleSyscall(struct user_regs_struct *regs) {
+    uintptr_t sysnum = regs->orig_rax;
+    uintptr_t syscall_result = regs->rax;
+    // uintptr_t arg1 = regs->rdi;
+    uintptr_t arg2 = regs->rsi;
+    uintptr_t arg3 = regs->rdx;
+    uintptr_t arg4 = regs->r10;
+    uintptr_t arg5 = regs->r8;
+    uintptr_t arg6 = regs->r9;
+    printf("syscall=%s (%i)\n", SyscallName(sysnum), (int) sysnum);
+
+    switch (sysnum) {
+      case __NR_mmap: {
+        MmapInfo map;
+        map.addr = syscall_result;
+        map.size = arg2;
+        map.prot = arg3;
+        assert(arg4 == (MAP_ANON | MAP_PRIVATE));
+        assert((int) arg5 == -1);
+        assert(arg6 == 0);
+        mappings_.push_back(map);
+        break;
+      }
+    }
+  }
+};
 
 int main(int argc, char **argv) {
   assert(argc >= 2);
@@ -78,6 +120,7 @@ int main(int argc, char **argv) {
   // the next signal will indicate a syscall exit.
   bool syscall_entry = true;
 
+  Ptracer ptracer;
   for (;;) {
     int status;
     int rc = waitpid(pid, &status, 0);
@@ -91,8 +134,7 @@ int main(int argc, char **argv) {
         struct user_regs_struct regs = {};
         rc = ptrace(PTRACE_GETREGS, pid, 0, &regs);
         assert(rc == 0);
-        int sysnum = regs.orig_rax;
-        printf("syscall=%s (%i)\n", syscall_name(sysnum), sysnum);
+        ptracer.HandleSyscall(&regs);
       }
       syscall_entry = !syscall_entry;
 

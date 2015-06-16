@@ -8,4 +8,4 @@ gcc $cflags -static -nostdlib example_loader.c -o example_loader
 ./example_loader
 
 g++ $cflags ptracer.cc -o ptracer
-./ptracer /bin/echo "Hello world!"
+./ptracer ./example_loader
