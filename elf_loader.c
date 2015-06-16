@@ -25,14 +25,12 @@
 #include <stdint.h>
 #include <sys/mman.h>
 
-#include "native_client/src/include/build_config.h"
-
 /*
  * Get inline functions for system calls.
  */
 static int my_errno;
 #define SYS_ERRNO my_errno
-#include "third_party/lss/linux_syscall_support.h"
+#include "linux_syscall_support.h"
 
 #define MAX_PHNUM               12
 
@@ -433,10 +431,7 @@ static void fill_in_template_digits(char *start, size_t num_digits,
  * this process or examining its core file will find the PIE we loaded, the
  * dynamic linker, and all the shared libraries, making debugging pleasant.
  */
-#if !NACL_ANDROID
-/* Android does not define r_debug in a public header file. */
 struct r_debug _r_debug __attribute__((nocommon, section(".r_debug")));
-#endif  /* !NACL_ANDROID */
 
 /*
  * If the argument matches the kRDebugTemplate string, then replace
@@ -444,12 +439,10 @@ struct r_debug _r_debug __attribute__((nocommon, section(".r_debug")));
  */
 static int check_r_debug_arg(char *arg) {
   if (my_strcmp(arg, kRDebugTemplate) == 0) {
-#if !NACL_ANDROID
     fill_in_template_digits(arg + kRDebugPrefixLen,
                             sizeof(TEMPLATE_DIGITS) - 1,
                             (uintptr_t) &_r_debug);
     return 1;
-#endif  /* !NACL_ANDROID */
   }
   return 0;
 }
