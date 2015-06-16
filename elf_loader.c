@@ -293,10 +293,6 @@ static ElfW(Addr) load_elf_file(const char *filename,
     fail(filename, "ELF file has unreasonable ",
          "e_phnum", ehdr.e_phnum, NULL, 0);
 
-  if (ehdr.e_type != ET_DYN)
-    fail(filename, "ELF file not ET_DYN!  ",
-         "e_type", ehdr.e_type, NULL, 0);
-
   my_pread(filename, "Failed to read program headers from ELF file!  ",
            fd, phdr, sizeof(phdr[0]) * ehdr.e_phnum, ehdr.e_phoff);
 
@@ -322,11 +318,17 @@ static ElfW(Addr) load_elf_file(const char *filename,
    * Map the first segment and reserve the space used for the rest and
    * for holes between segments.
    */
+  uintptr_t load_addr = round_down(first_load->p_vaddr, pagesize);
   const uintptr_t mapping = my_mmap(filename, "segment", first_load - phdr,
-                                    round_down(first_load->p_vaddr, pagesize),
+                                    load_addr,
                                     span, prot_from_phdr(first_load),
                                     MAP_PRIVATE, fd,
                                     round_down(first_load->p_offset, pagesize));
+  if (ehdr.e_type == ET_EXEC && mapping != load_addr)
+    fail(filename,
+         "Could not reserve required address range for non-relocatable "
+         "(ET_EXEC) executable",
+         NULL, 0, NULL, 0);
 
   const ElfW(Addr) load_bias = mapping - round_down(first_load->p_vaddr,
                                                     pagesize);

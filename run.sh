@@ -14,7 +14,14 @@ ld.bfd -m elf_x86_64 --build-id -static -z max-page-size=0x1000 \
     --defsym RESERVE_TOP=0 --script elf_loader_linker_script.x \
     elf_loader.o -o elf_loader
 
+gcc $cflags hellow.c -o hellow_exec
+gcc $cflags hellow.c -fPIE -pie -o hellow_pie
+
 ./ptracer ./example_loader
 ./restore
 
 ./example_prog
+
+./elf_loader ./hellow_pie
+./elf_loader ./hellow_exec
+./elf_loader ./example_prog
