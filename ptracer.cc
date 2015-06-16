@@ -1,5 +1,6 @@
 
 #include <assert.h>
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <sys/mman.h>
@@ -42,6 +43,9 @@ const char *SyscallName(int sysnum) {
   }
 }
 
+uintptr_t RoundUpPageSize(uintptr_t val) {
+  uintptr_t page_size = getpagesize();
+  return (val + page_size - 1) & ~(page_size - 1);
 }
 
 class MmapInfo {
@@ -52,9 +56,12 @@ class MmapInfo {
 };
 
 class Ptracer {
+  int pid_;
   std::list<MmapInfo> mappings_;
 
  public:
+  Ptracer(int pid): pid_(pid) {}
+
   void HandleSyscall(struct user_regs_struct *regs) {
     uintptr_t sysnum = regs->orig_rax;
     uintptr_t syscall_result = regs->rax;
@@ -70,7 +77,7 @@ class Ptracer {
       case __NR_mmap: {
         MmapInfo map;
         map.addr = syscall_result;
-        map.size = arg2;
+        map.size = RoundUpPageSize(arg2);
         map.prot = arg3;
         assert(arg4 == (MAP_ANON | MAP_PRIVATE));
         assert((int) arg5 == -1);
@@ -80,7 +87,45 @@ class Ptracer {
       }
     }
   }
+
+  void Put(uint64_t val) {
+    printf("%" PRIx64 "\n", val);
+  }
+
+  void Dump() {
+    FILE *mapfile = fopen("out_pages", "w");
+    assert(mapfile);
+    uintptr_t mapfile_offset = 0;
+    for (auto map : mappings_) {
+      Put(map.addr);
+      Put(map.size);
+      Put(map.prot);
+      Put(mapfile_offset);
+
+      for (uintptr_t offset = 0; offset < map.size;
+           offset += sizeof(uintptr_t)) {
+        uintptr_t word = ptrace(PTRACE_PEEKDATA, pid_, map.addr + offset, 0);
+        fwrite(&word, sizeof(word), 1, mapfile);
+      }
+      mapfile_offset += map.size;
+    }
+    fclose(mapfile);
+  }
+
+  void TerminateSubprocess() {
+    int rc = kill(pid_, SIGKILL);
+    assert(rc == 0);
+
+    // Wait for the SIGKILL signal to take effect.
+    int status;
+    int pid2 = waitpid(pid_, &status, 0);
+    assert(pid2 == pid_);
+    assert(WIFSIGNALED(status));
+    assert(WTERMSIG(status) == SIGKILL);
+  }
 };
+
+}
 
 int main(int argc, char **argv) {
   assert(argc >= 2);
@@ -103,13 +148,13 @@ int main(int argc, char **argv) {
   // execve() call.  Since we haven't done PTRACE_SETOPTIONS yet,
   // kSysFlag isn't set in the signal number yet.
   int status;
-  int rc = waitpid(pid, &status, 0);
-  assert(rc == pid);
+  int pid2 = waitpid(pid, &status, 0);
+  assert(pid2 == pid);
   assert(WIFSTOPPED(status));
   assert(WSTOPSIG(status) == SIGTRAP);
 
   // Enable kSysFlag.
-  rc = ptrace(PTRACE_SETOPTIONS, pid, 0, PTRACE_O_TRACESYSGOOD);
+  int rc = ptrace(PTRACE_SETOPTIONS, pid, 0, PTRACE_O_TRACESYSGOOD);
   assert(rc == 0);
 
   // Allow the process to continue until the next syscall entry/exit.
@@ -120,17 +165,16 @@ int main(int argc, char **argv) {
   // the next signal will indicate a syscall exit.
   bool syscall_entry = true;
 
-  Ptracer ptracer;
+  Ptracer ptracer(pid);
   for (;;) {
     int status;
     int rc = waitpid(pid, &status, 0);
     assert(rc == pid);
 
-    if (!WIFSTOPPED(status))
-      break;
+    assert(WIFSTOPPED(status));
 
     if (WSTOPSIG(status) == (SIGTRAP | kSysFlag)) {
-      if (syscall_entry) {
+      if (!syscall_entry) {
         struct user_regs_struct regs = {};
         rc = ptrace(PTRACE_GETREGS, pid, 0, &regs);
         assert(rc == 0);
@@ -141,6 +185,11 @@ int main(int argc, char **argv) {
       // Allow the process to continue until the next syscall entry/exit.
       rc = ptrace(PTRACE_SYSCALL, pid, 0, 0);
       assert(rc == 0);
+    } else if (WSTOPSIG(status) == SIGUSR1) {
+      printf("usr1\n");
+      ptracer.Dump();
+      ptracer.TerminateSubprocess();
+      break;
     }
   }
   return 0;

@@ -11,6 +11,15 @@ static int my_errno;
 extern char code_start[], code_end[];
 asm("code_start:\n"
 
+    // Call getpid()
+    "movl $39, %eax\n"
+    "syscall\n"
+    // Call kill(getpid(), SIGUSR1)
+    "movl %eax, %edi\n" // arg1: result of getpid()
+    "movl $10, %esi\n" // arg2: SIGUSR1
+    "movl $62, %eax\n" // __NR_kill
+    "syscall\n"
+
     // Call write()
     "movl $1, %edi\n" // arg 1: stdout
     "leaq string(%rip), %rsi\n" // arg 2: string
