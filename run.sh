@@ -20,6 +20,9 @@ ld.bfd -m elf_x86_64 --build-id -static -z max-page-size=0x1000 \
 gcc $cflags tests/hellow.c -o out/hellow_exec
 gcc $cflags tests/hellow.c -fPIE -pie -o out/hellow_pie
 
+gcc $cflags tests/save_restore_tests.cc -o out/save_restore_tests
+
+
 ./out/elf_loader ./out/hellow_pie
 ./out/elf_loader ./out/hellow_exec
 
@@ -30,4 +33,7 @@ gcc $cflags tests/hellow.c -fPIE -pie -o out/hellow_pie
 ./out/restore
 
 ./out/ptracer ./out/elf_loader ./out/example_prog2
+./out/restore
+
+./out/ptracer ./out/elf_loader ./out/save_restore_tests
 ./out/restore

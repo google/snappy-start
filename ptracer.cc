@@ -129,6 +129,7 @@ class Ptracer {
         MmapInfo map;
         map.addr = syscall_result;
         map.size = RoundUpPageSize(arg2);
+        assert(map.addr + map.size >= map.addr);
         map.prot = arg3;
         // assert(arg4 == (MAP_ANON | MAP_PRIVATE));
         int fd_arg = arg5;
@@ -138,6 +139,34 @@ class Ptracer {
         }
         map.file_offset = arg6;
         mappings_.push_back(map);
+        break;
+      }
+      case __NR_munmap: {
+        uintptr_t unmap_start = arg1;
+        uintptr_t unmap_size = RoundUpPageSize(arg2);
+        uintptr_t unmap_end = unmap_start + unmap_size;
+        assert(unmap_end >= unmap_start);
+        for (std::list<MmapInfo>::iterator iter = mappings_.begin();
+             iter != mappings_.end(); ) {
+          std::list<MmapInfo>::iterator mapping = iter++;
+          uintptr_t mapping_end = mapping->addr + mapping->size;
+          // Does this existing mapping overlap with the range we are
+          // unmapping?
+          if (mapping_end <= unmap_start ||
+              unmap_end <= mapping->addr) {
+            // No overlap.
+            continue;
+          }
+          // Do we need to keep the start and/or end of the existing
+          // mapping?
+          if (unmap_start > mapping->addr) {
+            assert(0);
+          }
+          if (unmap_end < mapping_end) {
+            assert(0);
+          }
+          mappings_.erase(mapping);
+        }
         break;
       }
       case __NR_arch_prctl: {
@@ -193,7 +222,7 @@ class Ptracer {
     Put(fs_segment_base_);
 
     Put(mappings_.size());
-    for (auto map : mappings_) {
+    for (auto &map : mappings_) {
       Put(map.addr);
       Put(map.size);
       Put(map.prot);
