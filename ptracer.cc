@@ -55,7 +55,12 @@ class MmapInfo {
  public:
   uintptr_t addr;
   size_t size;
+  // Current access permissions.
   int prot;
+  // Maximum access permissions that this mapping has ever been
+  // mmap()'d or mprotect()'d with.  This is used to determine whether
+  // mapping could have been written to.
+  int max_prot;
   std::string filename;
   uint64_t file_offset;
 };
@@ -91,6 +96,55 @@ class Ptracer {
       buf.sputc(ch);
     }
     return buf.str();
+  }
+
+  void ChangeMapping(uintptr_t change_start, size_t change_size,
+                     bool do_unmap, int new_prot) {
+    change_size = RoundUpPageSize(change_size);
+    uintptr_t change_end = change_start + change_size;
+    assert(change_end >= change_start);
+    for (std::list<MmapInfo>::iterator iter = mappings_.begin();
+         iter != mappings_.end(); ) {
+      std::list<MmapInfo>::iterator mapping = iter++;
+      uintptr_t mapping_end = mapping->addr + mapping->size;
+      // Does this existing mapping overlap with the range we are
+      // unmapping?
+      if (mapping_end <= change_start ||
+          change_end <= mapping->addr) {
+        // No overlap.
+        continue;
+      }
+      // Do we need to keep the start and/or end of the existing
+      // mapping?
+      if (change_start > mapping->addr) {
+        // Keep the start of the mapping.
+        MmapInfo new_part(*mapping);
+        new_part.size = change_start - mapping->addr;
+        mappings_.insert(mapping, new_part);
+      }
+      if (change_end < mapping_end) {
+        // Keep the end of the mapping.
+        MmapInfo new_part(*mapping);
+        size_t diff = change_end - mapping->addr;
+        new_part.addr += diff;
+        new_part.size -= diff;
+        new_part.file_offset += diff;
+        mappings_.insert(mapping, new_part);
+      }
+      if (do_unmap) {
+        // munmap() case.
+        mappings_.erase(mapping);
+      } else {
+        // mprotect() case.
+        uintptr_t new_start = std::max(change_start, mapping->addr);
+        uintptr_t new_end = std::min(change_end, mapping_end);
+        mapping->file_offset += new_start - mapping->addr;
+        mapping->addr = new_start;
+        mapping->size = new_end - new_start;
+        mapping->prot = new_prot;
+        mapping->max_prot |= new_prot;
+      }
+    }
   }
 
  public:
@@ -131,6 +185,7 @@ class Ptracer {
         map.size = RoundUpPageSize(arg2);
         assert(map.addr + map.size >= map.addr);
         map.prot = arg3;
+        map.max_prot = map.prot;
         // assert(arg4 == (MAP_ANON | MAP_PRIVATE));
         int fd_arg = arg5;
         if (fd_arg != -1) {
@@ -142,40 +197,16 @@ class Ptracer {
         break;
       }
       case __NR_munmap: {
-        uintptr_t unmap_start = arg1;
-        uintptr_t unmap_size = RoundUpPageSize(arg2);
-        uintptr_t unmap_end = unmap_start + unmap_size;
-        assert(unmap_end >= unmap_start);
-        for (std::list<MmapInfo>::iterator iter = mappings_.begin();
-             iter != mappings_.end(); ) {
-          std::list<MmapInfo>::iterator mapping = iter++;
-          uintptr_t mapping_end = mapping->addr + mapping->size;
-          // Does this existing mapping overlap with the range we are
-          // unmapping?
-          if (mapping_end <= unmap_start ||
-              unmap_end <= mapping->addr) {
-            // No overlap.
-            continue;
-          }
-          // Do we need to keep the start and/or end of the existing
-          // mapping?
-          if (unmap_start > mapping->addr) {
-            // Keep the start of the mapping.
-            MmapInfo new_part(*mapping);
-            new_part.size = unmap_start - mapping->addr;
-            mappings_.insert(mapping, new_part);
-          }
-          if (unmap_end < mapping_end) {
-            // Keep the end of the mapping.
-            MmapInfo new_part(*mapping);
-            size_t diff = unmap_end - mapping->addr;
-            new_part.addr += diff;
-            new_part.size -= diff;
-            new_part.file_offset += diff;
-            mappings_.insert(mapping, new_part);
-          }
-          mappings_.erase(mapping);
-        }
+        uintptr_t addr = arg1;
+        uintptr_t size = arg2;
+        ChangeMapping(addr, size, true, 0);
+        break;
+      }
+      case __NR_mprotect: {
+        uintptr_t addr = arg1;
+        uintptr_t size = arg2;
+        int prot = arg3;
+        ChangeMapping(addr, size, false, prot);
         break;
       }
       case __NR_arch_prctl: {
@@ -238,7 +269,8 @@ class Ptracer {
       PutString(map.filename);
       Put(map.file_offset);
 
-      if (map.prot & PROT_WRITE) {
+      if (map.max_prot & PROT_WRITE) {
+        Put(1);
         Put(mapfile_offset);
         for (uintptr_t offset = 0; offset < map.size;
              offset += sizeof(uintptr_t)) {
@@ -246,6 +278,8 @@ class Ptracer {
           fwrite(&word, sizeof(word), 1, mapfile);
         }
         mapfile_offset += map.size;
+      } else {
+        Put(0);
       }
     }
     fclose(mapfile);

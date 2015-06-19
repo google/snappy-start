@@ -23,10 +23,20 @@ int main() {
   rc = munmap((char *) addr2 + size, size);
   assert(rc == 0);
 
+  // Test mprotect() of an entire mapping.
+  void *addr3 = mmap(NULL, size, PROT_READ | PROT_WRITE,
+                     MAP_PRIVATE | MAP_ANON, -1, 0);
+  assert(addr3 != MAP_FAILED);
+  *(int *) addr3 = 0x1234;
+  rc = mprotect(addr3, size, PROT_READ);
+  assert(rc == 0);
+
   raise(SIGUSR1);
 
   assert(((char *) addr2)[0] == 'a');
   assert(((char *) addr2)[size * 2] == 'b');
+
+  assert(*(int *) addr3 == 0x1234);
 
   return 0;
 }

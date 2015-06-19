@@ -118,8 +118,9 @@ int main() {
     uintptr_t prot = reader.Get();
     const char *filename = reader.GetString();
     uintptr_t file_offset = reader.Get();
+    bool has_data_in_dump_file = reader.Get();
 
-    if (prot & PROT_WRITE) {
+    if (has_data_in_dump_file) {
       uintptr_t mapfile_offset = reader.Get();
       void *addr2 = mmap(addr, size, prot, MAP_PRIVATE | MAP_FIXED,
                          mapfile_fd, mapfile_offset);
