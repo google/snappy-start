@@ -160,10 +160,19 @@ class Ptracer {
           // Do we need to keep the start and/or end of the existing
           // mapping?
           if (unmap_start > mapping->addr) {
-            assert(0);
+            // Keep the start of the mapping.
+            MmapInfo new_part(*mapping);
+            new_part.size = unmap_start - mapping->addr;
+            mappings_.insert(mapping, new_part);
           }
           if (unmap_end < mapping_end) {
-            assert(0);
+            // Keep the end of the mapping.
+            MmapInfo new_part(*mapping);
+            size_t diff = unmap_end - mapping->addr;
+            new_part.addr += diff;
+            new_part.size -= diff;
+            new_part.file_offset += diff;
+            mappings_.insert(mapping, new_part);
           }
           mappings_.erase(mapping);
         }
