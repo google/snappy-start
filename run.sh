@@ -4,28 +4,30 @@ set -eu
 
 cflags="-O2 -g -Wall -Werror -Wundef"
 
-gcc $cflags -static -nostdlib example_loader.c -o example_loader
-gcc $cflags -static -nostdlib example_prog.c -o example_prog
-gcc $cflags example_prog2.c -o example_prog2
-g++ $cflags -std=c++11 ptracer.cc -o ptracer
-g++ $cflags -std=c++11 -Wl,-Ttext-segment=0x1000000 restore.cc -o restore
+mkdir -p out
 
-gcc $cflags -fno-stack-protector -c elf_loader.c
+gcc $cflags -static -nostdlib example_loader.c -o out/example_loader
+gcc $cflags -static -nostdlib example_prog.c -o out/example_prog
+gcc $cflags example_prog2.c -o out/example_prog2
+g++ $cflags -std=c++11 ptracer.cc -o out/ptracer
+g++ $cflags -std=c++11 -Wl,-Ttext-segment=0x1000000 restore.cc -o out/restore
+
+gcc $cflags -fno-stack-protector -c elf_loader.c -o out/elf_loader.o
 ld.bfd -m elf_x86_64 --build-id -static -z max-page-size=0x1000 \
     --defsym RESERVE_TOP=0 --script elf_loader_linker_script.x \
-    elf_loader.o -o elf_loader
+    out/elf_loader.o -o out/elf_loader
 
-gcc $cflags hellow.c -o hellow_exec
-gcc $cflags hellow.c -fPIE -pie -o hellow_pie
+gcc $cflags hellow.c -o out/hellow_exec
+gcc $cflags hellow.c -fPIE -pie -o out/hellow_pie
 
-./elf_loader ./hellow_pie
-./elf_loader ./hellow_exec
+./out/elf_loader ./out/hellow_pie
+./out/elf_loader ./out/hellow_exec
 
-./ptracer ./example_loader
-./restore
+./out/ptracer ./out/example_loader
+./out/restore
 
-./ptracer ./elf_loader ./example_prog
-./restore
+./out/ptracer ./out/elf_loader ./out/example_prog
+./out/restore
 
-./ptracer ./elf_loader ./example_prog2
-./restore
+./out/ptracer ./out/elf_loader ./out/example_prog2
+./out/restore
