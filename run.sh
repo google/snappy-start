@@ -2,13 +2,13 @@
 
 set -eu
 
-cflags="-O2 -g -Wall -Werror -Wundef"
+cflags="-I. -O2 -g -Wall -Werror -Wundef"
 
 mkdir -p out
 
-gcc $cflags -static -nostdlib example_loader.c -o out/example_loader
-gcc $cflags -static -nostdlib example_prog.c -o out/example_prog
-gcc $cflags example_prog2.c -o out/example_prog2
+gcc $cflags -static -nostdlib tests/example_loader.c -o out/example_loader
+gcc $cflags -static -nostdlib tests/example_prog.c -o out/example_prog
+gcc $cflags tests/example_prog2.c -o out/example_prog2
 g++ $cflags -std=c++11 ptracer.cc -o out/ptracer
 g++ $cflags -std=c++11 -Wl,-Ttext-segment=0x1000000 restore.cc -o out/restore
 
@@ -17,8 +17,8 @@ ld.bfd -m elf_x86_64 --build-id -static -z max-page-size=0x1000 \
     --defsym RESERVE_TOP=0 --script elf_loader_linker_script.x \
     out/elf_loader.o -o out/elf_loader
 
-gcc $cflags hellow.c -o out/hellow_exec
-gcc $cflags hellow.c -fPIE -pie -o out/hellow_pie
+gcc $cflags tests/hellow.c -o out/hellow_exec
+gcc $cflags tests/hellow.c -fPIE -pie -o out/hellow_pie
 
 ./out/elf_loader ./out/hellow_pie
 ./out/elf_loader ./out/hellow_exec
