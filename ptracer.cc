@@ -147,6 +147,14 @@ class Ptracer {
     }
   }
 
+  void HandleMunmap(uintptr_t addr, size_t size) {
+    ChangeMapping(addr, size, true, 0);
+  }
+
+  void HandleMprotect(uintptr_t addr, size_t size, int prot) {
+    ChangeMapping(addr, size, false, prot);
+  }
+
  public:
   Ptracer(int pid): pid_(pid) {}
 
@@ -180,10 +188,16 @@ class Ptracer {
         break;
       }
       case __NR_mmap: {
+        uintptr_t addr = syscall_result;
+        size_t size = RoundUpPageSize(arg2);
+        assert(addr + size >= addr);
+        // Record overwriting of any existing mappings in this range
+        // in case this mmap() call uses MAP_FIXED.
+        HandleMunmap(addr, size);
+
         MmapInfo map;
-        map.addr = syscall_result;
-        map.size = RoundUpPageSize(arg2);
-        assert(map.addr + map.size >= map.addr);
+        map.addr = addr;
+        map.size = size;
         map.prot = arg3;
         map.max_prot = map.prot;
         // assert(arg4 == (MAP_ANON | MAP_PRIVATE));
@@ -197,16 +211,11 @@ class Ptracer {
         break;
       }
       case __NR_munmap: {
-        uintptr_t addr = arg1;
-        uintptr_t size = arg2;
-        ChangeMapping(addr, size, true, 0);
+        HandleMunmap(arg1, arg2);
         break;
       }
       case __NR_mprotect: {
-        uintptr_t addr = arg1;
-        uintptr_t size = arg2;
-        int prot = arg3;
-        ChangeMapping(addr, size, false, prot);
+        HandleMprotect(arg1, arg2, arg3);
         break;
       }
       case __NR_arch_prctl: {

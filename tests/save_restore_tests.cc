@@ -31,6 +31,13 @@ int main() {
   rc = mprotect(addr3, size, PROT_READ);
   assert(rc == 0);
 
+  // Test overwriting a mapping with MAP_FIXED.
+  void *addr4 = mmap(NULL, size, PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0);
+  assert(addr4 != MAP_FAILED);
+  void *result = mmap(addr4, size, PROT_READ | PROT_WRITE,
+                      MAP_PRIVATE | MAP_ANON | MAP_FIXED, -1, 0);
+  assert(result == addr4);
+
   raise(SIGUSR1);
 
   assert(((char *) addr2)[0] == 'a');
