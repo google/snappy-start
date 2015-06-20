@@ -357,10 +357,18 @@ int main(int argc, char **argv) {
     assert(WIFSTOPPED(status));
 
     if (WSTOPSIG(status) == (SIGTRAP | kSysFlag)) {
-      if (!syscall_entry) {
-        struct user_regs_struct regs;
-        rc = ptrace(PTRACE_GETREGS, pid, 0, &regs);
-        assert(rc == 0);
+      struct user_regs_struct regs;
+      rc = ptrace(PTRACE_GETREGS, pid, 0, &regs);
+      assert(rc == 0);
+      if (syscall_entry) {
+        // Disable use of the brk() heap so that we don't have to save
+        // and restore the brk() heap pointer and heap contents.
+        if (regs.orig_rax == __NR_brk) {
+          regs.orig_rax = -1;
+          rc = ptrace(PTRACE_SETREGS, pid, 0, &regs);
+          assert(rc == 0);
+        }
+      } else {
         ptracer.HandleSyscall(&regs);
       }
       syscall_entry = !syscall_entry;
