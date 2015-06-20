@@ -1,13 +1,28 @@
 
 #include <asm/prctl.h>
-#include <assert.h>
 #include <fcntl.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
-#include <sys/syscall.h>
 #include <unistd.h>
+
+static int my_errno;
+#define SYS_ERRNO my_errno
+#include "linux_syscall_support.h"
+
+
+#define TO_STRING_1(x) #x
+#define TO_STRING(x) TO_STRING_1(x)
+
+#define assert(expr)                                                    \
+  if (!(expr)) {                                                        \
+    static const char msg[] =                                           \
+        "Assertion failed at " __FILE__ ":" TO_STRING(__LINE__)         \
+        ": " #expr "\n";                                                \
+    sys_write(2, msg, sizeof(msg) - 1);                                 \
+    sys_exit_group(1);                                                  \
+  }
 
 
 namespace {
@@ -19,13 +34,13 @@ class Reader {
 
  public:
   Reader(const char *filename): pos_(0) {
-    int fd = open(filename, O_RDONLY);
+    int fd = sys_open(filename, O_RDONLY, 0);
     assert(fd >= 0);
-    ssize_t got = read(fd, buf_, sizeof(buf_));
+    ssize_t got = sys_read(fd, buf_, sizeof(buf_));
     assert(got >= 0);
     assert(got < (ssize_t) sizeof(buf_));
     size_ = got;
-    int rc = close(fd);
+    int rc = sys_close(fd);
     assert(rc == 0);
   }
 
@@ -85,9 +100,9 @@ void RestoreRegs(struct RegsToRestore *regs) {
 
 }
 
-int main() {
+extern "C" void _start() {
   Reader reader("out_info");
-  int mapfile_fd = open("out_pages", O_RDONLY);
+  int mapfile_fd = sys_open("out_pages", O_RDONLY, 0);
   assert(mapfile_fd >= 0);
 
   RegsToRestore regs;
@@ -122,29 +137,28 @@ int main() {
 
     if (has_data_in_dump_file) {
       uintptr_t mapfile_offset = reader.Get();
-      void *addr2 = mmap(addr, size, prot, MAP_PRIVATE,
-                         mapfile_fd, mapfile_offset);
+      void *addr2 = sys_mmap(addr, size, prot, MAP_PRIVATE,
+                             mapfile_fd, mapfile_offset);
       assert(addr2 == addr);
     } else {
       assert(*filename);
-      int fd = open(filename, O_RDONLY);
+      int fd = sys_open(filename, O_RDONLY, 0);
       assert(fd >= 0);
 
-      void *addr2 = mmap(addr, size, prot, MAP_PRIVATE, fd, file_offset);
+      void *addr2 = sys_mmap(addr, size, prot, MAP_PRIVATE, fd, file_offset);
       assert(addr2 == addr);
 
-      int rc = close(fd);
+      int rc = sys_close(fd);
       assert(rc == 0);
     }
   }
 
-  int rc = close(mapfile_fd);
+  int rc = sys_close(mapfile_fd);
   assert(rc == 0);
 
-  rc = syscall(__NR_arch_prctl, ARCH_SET_FS, fs_segment_base);
+  rc = sys_arch_prctl(ARCH_SET_FS, (void *) fs_segment_base);
   assert(rc == 0);
 
   RestoreRegs(&regs);
   // Should not reach here.
-  return 1;
 }

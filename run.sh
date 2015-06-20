@@ -10,7 +10,11 @@ gcc $cflags -static -nostdlib tests/example_loader.c -o out/example_loader
 gcc $cflags -static -nostdlib tests/example_prog.c -o out/example_prog
 gcc $cflags tests/example_prog2.c -o out/example_prog2
 g++ $cflags -std=c++11 ptracer.cc -o out/ptracer
-g++ $cflags -std=c++11 -Wl,-Ttext-segment=0x1000000 restore.cc -o out/restore
+
+g++ $cflags -std=c++11 -fno-stack-protector -c restore.cc -o out/restore.o
+ld.bfd -m elf_x86_64 --build-id -static -z max-page-size=0x1000 \
+    --defsym RESERVE_TOP=0 --script elf_loader_linker_script.x \
+    out/restore.o -o out/restore
 
 gcc $cflags -fno-stack-protector -c elf_loader.c -o out/elf_loader.o
 ld.bfd -m elf_x86_64 --build-id -static -z max-page-size=0x1000 \
