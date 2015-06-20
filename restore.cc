@@ -122,7 +122,7 @@ int main() {
 
     if (has_data_in_dump_file) {
       uintptr_t mapfile_offset = reader.Get();
-      void *addr2 = mmap(addr, size, prot, MAP_PRIVATE | MAP_FIXED,
+      void *addr2 = mmap(addr, size, prot, MAP_PRIVATE,
                          mapfile_fd, mapfile_offset);
       assert(addr2 == addr);
     } else {
@@ -130,8 +130,7 @@ int main() {
       int fd = open(filename, O_RDONLY);
       assert(fd >= 0);
 
-      void *addr2 = mmap(addr, size, prot, MAP_PRIVATE | MAP_FIXED,
-                         fd, file_offset);
+      void *addr2 = mmap(addr, size, prot, MAP_PRIVATE, fd, file_offset);
       assert(addr2 == addr);
 
       int rc = close(fd);
