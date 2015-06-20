@@ -657,6 +657,11 @@ Failed to find AT_BASE, AT_ENTRY, AT_PHDR, AT_PHNUM, or AT_PAGESZ!",
       case AT_PHNUM:
         av_phnum = av;
         break;
+      /* Disable access to the VDSO. */
+      case AT_SYSINFO:
+      case AT_SYSINFO_EHDR:
+        av->a_type = AT_IGNORE;
+        break;
     }
   }
 

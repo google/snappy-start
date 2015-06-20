@@ -1,15 +1,17 @@
 
 #include <assert.h>
+#include <elf.h>
 #include <errno.h>
 #include <signal.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <sys/mman.h>
 #include <sys/syscall.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 
-int main() {
+int main(int argc, char **argv, char **envp) {
   // Test munmap() of an entire mapping.
   int size = getpagesize();
   void *addr = mmap(NULL, size, PROT_READ | PROT_WRITE,
@@ -56,6 +58,16 @@ int main() {
     *(int *) blocks[i] = i * 100;
   }
 
+  // Test that the auxv's pointers to the VDSO have been removed.
+  char **envp_end = envp;
+  while (*envp_end)
+    envp_end++;
+  Elf64_auxv_t *auxv = (Elf64_auxv_t *) (envp_end + 1);
+  for (; auxv->a_type != AT_NULL; ++auxv) {
+    assert(auxv->a_type != AT_SYSINFO);
+    assert(auxv->a_type != AT_SYSINFO_EHDR);
+  }
+
   raise(SIGUSR1);
 
   assert(((char *) addr2)[0] == 'a');
@@ -71,6 +83,11 @@ int main() {
   for (int i = 0; i < num_blocks; ++i) {
     assert(*(int *) blocks[i] == i * 100);
   }
+
+  // Test gettimeofday(), which we expect will try to use the VDSO.
+  struct timeval time;
+  rc = gettimeofday(&time, NULL);
+  assert(rc == 0);
 
   return 0;
 }
