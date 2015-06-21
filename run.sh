@@ -27,6 +27,8 @@ gcc $cflags tests/hellow.c -fPIE -pie -o out/hellow_pie
 gcc $cflags tests/save_restore_tests.cc -o out/save_restore_tests
 
 
+# Run tests
+
 ./out/elf_loader ./out/hellow_pie
 ./out/elf_loader ./out/hellow_exec
 
