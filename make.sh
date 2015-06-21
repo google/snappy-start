@@ -43,3 +43,6 @@ gcc $cflags tests/save_restore_tests.cc -o out/save_restore_tests
 
 ./out/ptracer ./out/elf_loader ./out/save_restore_tests
 ./out/restore
+
+./out/ptracer ./out/elf_loader /usr/bin/python tests/python_example.py
+./out/restore
