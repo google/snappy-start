@@ -1,9 +1,9 @@
 
-# Tool for process startup snapshots
+# snappy-start: Tool for process startup snapshots
 
-This repo contains a tool which takes a snapshot of a Linux program's
-process state after it has started up.  It allows multiple instances of the
-program to be quickly launched from the snapshot.
+snappy-start is a tool which takes a snapshot of a Linux program's process
+state after it has started up.  It allows multiple instances of the program
+to be quickly launched from the snapshot.
 
 This has two potential benefits:
 
