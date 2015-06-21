@@ -2,7 +2,14 @@
  * Copyright (c) 2012 The Native Client Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
- *
+ */
+
+/*
+ * This file is based on nacl_bootstrap.c from Native Client:
+ * https://chromium.googlesource.com/native_client/src/native_client/+/287c0fffd7d3b7f38b887324f261ddb724d38f26/src/trusted/service_runtime/linux/nacl_bootstrap.c
+ */
+
+/*
  * This is a standalone program that loads and runs the dynamic linker.
  * This program itself must be linked statically.  To keep it small, it's
  * written to avoid all dependencies on libc and standard startup code.

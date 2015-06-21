@@ -2,7 +2,14 @@
  * Copyright (c) 2011 The Native Client Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
- *
+ */
+
+/*
+ * This file is based on nacl_bootstrap.x from Native Client:
+ * https://chromium.googlesource.com/native_client/src/native_client/+/287c0fffd7d3b7f38b887324f261ddb724d38f26/src/trusted/service_runtime/linux/nacl_bootstrap.x
+ */
+
+/*
  * This is a custom linker script used to build nacl_helper_bootstrap.
  * It has a very special layout.  This script will only work with input
  * that is kept extremely minimal.  If there are unexpected input sections
