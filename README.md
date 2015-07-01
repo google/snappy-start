@@ -44,3 +44,10 @@ $ ./out/ptracer ./out/elf_loader /usr/bin/python tests/python_example.py
 $ ./out/restore
 Hello world, from restored Python process
 ```
+
+
+## Credits
+
+The idea for this tool comes from Kenton Varda, who proposed using a
+"record/replay" approach, using `ptrace()` to monitor syscalls so that
+they can later be replayed.
