@@ -28,27 +28,6 @@ namespace {
 // the option PTRACE_O_TRACESYSGOOD is enabled.
 const int kSysFlag = 0x80;
 
-const char *SyscallName(int sysnum) {
-  switch (sysnum) {
-#define MAP(name) case __NR_##name: return #name;
-    MAP(access)
-    MAP(arch_prctl)
-    MAP(brk)
-    MAP(close)
-    MAP(execve)
-    MAP(exit)
-    MAP(exit_group)
-    MAP(fstat)
-    MAP(mmap)
-    MAP(mprotect)
-    MAP(munmap)
-    MAP(open)
-    MAP(read)
-    MAP(write)
-    default: return "?";
-  }
-}
-
 uintptr_t RoundUpPageSize(uintptr_t val) {
   uintptr_t page_size = getpagesize();
   return (val + page_size - 1) & ~(page_size - 1);
@@ -170,7 +149,6 @@ class Ptracer {
     // uintptr_t arg4 = regs->r10;
     uintptr_t arg5 = regs->r8;
     uintptr_t arg6 = regs->r9;
-    printf("syscall=%s (%i)\n", SyscallName(sysnum), (int) sysnum);
 
     if (syscall_result > -(uintptr_t) 0x1000) {
       // Syscall returned an error so should have had no effect.
@@ -180,7 +158,6 @@ class Ptracer {
     switch (sysnum) {
       case __NR_open: {
         std::string filename(ReadString(arg1));
-        printf("open: %s\n", filename.c_str());
         int fd_result = syscall_result;
         if (fd_result >= 0)
           fds_[fd_result] = filename;
