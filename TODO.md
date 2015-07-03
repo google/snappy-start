@@ -6,7 +6,6 @@
 * Whitelist syscalls
    * Create snapshot on first unhandled syscall (e.g. `getpid()`)
 * Handle `MAP_ANON` memory that is never made writable (e.g. `PROT_NONE`)
-* Fix the buffer size limit in `restore`
 * Use `PTRACE_O_EXITKILL` so the tracee process can't escape
 * Save/restore more state:
    * Full set of x86 registers
@@ -24,6 +23,7 @@
    * UID, GID, etc.
    * x86 segment selector registers (to be nit-picky)
 * Save and replay output to stdout/stderr
+* Ensure `restore`'s temporary mapping does not conflict with restored program
 
 
 ## Usability

@@ -78,6 +78,24 @@ void test_mmap_fixed_overwrites() {
   do_snapshot();
 }
 
+void test_many_mappings() {
+  // Test that we can handle a large number of mappings.
+  int page_size = getpagesize();
+  int pages = 100;
+  uintptr_t addr =
+    (uintptr_t) mmap(NULL, pages * page_size, PROT_READ | PROT_WRITE,
+                     MAP_PRIVATE | MAP_ANON, -1, 0);
+  assert(addr != (uintptr_t) MAP_FAILED);
+
+  // Change every other page.
+  for (int i = 0; i < pages; i += 2) {
+    int rc = mprotect((void *) (addr + i * page_size), page_size, PROT_READ);
+    assert(rc == 0);
+  }
+
+  do_snapshot();
+}
+
 void test_brk() {
   // Test that brk() is disabled before taking the snapshot.
   long break_ptr = syscall(__NR_brk, 0);
@@ -143,6 +161,7 @@ const TestCase test_cases[] = {
   TEST_CASE(test_munmap_splits_mapping),
   TEST_CASE(test_mprotect),
   TEST_CASE(test_mmap_fixed_overwrites),
+  TEST_CASE(test_many_mappings),
   TEST_CASE(test_brk),
   TEST_CASE(test_malloc),
   TEST_CASE(test_vdso_removed_from_auxv),

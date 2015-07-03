@@ -31,35 +31,48 @@ static int my_errno;
 namespace {
 
 class Reader {
-  char buf_[0x1000];
-  size_t size_;
-  size_t pos_;
+  void *mapping_;
+  char *pos_;
+  char *end_;
 
  public:
   Reader(const char *filename): pos_(0) {
     int fd = sys_open(filename, O_RDONLY, 0);
     assert(fd >= 0);
-    ssize_t got = sys_read(fd, buf_, sizeof(buf_));
-    assert(got >= 0);
-    assert(got < (ssize_t) sizeof(buf_));
-    size_ = got;
-    int rc = sys_close(fd);
+
+    struct kernel_stat stat_info;
+    int rc = sys_fstat(fd, &stat_info);
+    assert(rc == 0);
+    size_t file_size = stat_info.st_size;
+
+    mapping_ = sys_mmap(NULL, file_size, PROT_READ, MAP_PRIVATE, fd, 0);
+    assert(mapping_ != MAP_FAILED);
+
+    rc = sys_close(fd);
+    assert(rc == 0);
+
+    pos_ = (char *) mapping_;
+    end_ = pos_ + file_size;
+  }
+
+  void Unmap() {
+    int rc = sys_munmap(mapping_, end_ - (char *) mapping_);
     assert(rc == 0);
   }
 
   uint64_t Get() {
-    assert(pos_ + sizeof(uint64_t) <= size_);
+    assert(pos_ + sizeof(uint64_t) <= end_);
     uint64_t val;
-    memcpy(&val, &buf_[pos_], sizeof(val));
+    memcpy(&val, pos_, sizeof(val));
     pos_ += sizeof(uint64_t);
     return val;
   }
 
   const char *GetString() {
     size_t len = Get();
-    const char *str = &buf_[pos_];
+    const char *str = pos_;
     pos_ += len + 1;
-    assert(pos_ <= size_);
+    assert(pos_ <= end_);
     return str;
   }
 };
@@ -155,6 +168,8 @@ extern "C" void _start() {
       assert(rc == 0);
     }
   }
+
+  reader.Unmap();
 
   int rc = sys_close(mapfile_fd);
   assert(rc == 0);
