@@ -156,8 +156,7 @@ extern "C" void _start() {
       void *addr2 = sys_mmap(addr, size, prot, MAP_PRIVATE,
                              mapfile_fd, mapfile_offset);
       assert(addr2 == addr);
-    } else {
-      assert(*filename);
+    } else if (*filename) {
       int fd = sys_open(filename, O_RDONLY, 0);
       assert(fd >= 0);
 
@@ -166,6 +165,9 @@ extern "C" void _start() {
 
       int rc = sys_close(fd);
       assert(rc == 0);
+    } else {
+      void *addr2 = sys_mmap(addr, size, prot, MAP_PRIVATE | MAP_ANON, -1, 0);
+      assert(addr2 == addr);
     }
   }
 

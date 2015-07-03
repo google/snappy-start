@@ -78,6 +78,28 @@ void test_mmap_fixed_overwrites() {
   do_snapshot();
 }
 
+void check_addr_is_reserved(void *addr) {
+  void *mapping = mmap(addr, getpagesize(), PROT_NONE,
+                       MAP_PRIVATE | MAP_ANON, -1, 0);
+  // |addr| should already be taken, so the kernel should have picked
+  // a different address.
+  assert(mapping != addr);
+  // Clean up.
+  int rc = munmap(mapping, getpagesize());
+  assert(rc == 0);
+}
+
+void test_mmap_prot_none() {
+  // Test restoring a PROT_NONE page that was never writable.
+  void *addr = mmap(NULL, getpagesize(), PROT_NONE,
+                    MAP_PRIVATE | MAP_ANON, -1, 0);
+  assert(addr != MAP_FAILED);
+
+  do_snapshot();
+
+  check_addr_is_reserved(addr);
+}
+
 void test_many_mappings() {
   // Test that we can handle a large number of mappings.
   int page_size = getpagesize();
@@ -161,6 +183,7 @@ const TestCase test_cases[] = {
   TEST_CASE(test_munmap_splits_mapping),
   TEST_CASE(test_mprotect),
   TEST_CASE(test_mmap_fixed_overwrites),
+  TEST_CASE(test_mmap_prot_none),
   TEST_CASE(test_many_mappings),
   TEST_CASE(test_brk),
   TEST_CASE(test_malloc),

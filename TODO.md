@@ -5,7 +5,6 @@
 
 * Whitelist syscalls
    * Create snapshot on first unhandled syscall (e.g. `getpid()`)
-* Handle `MAP_ANON` memory that is never made writable (e.g. `PROT_NONE`)
 * Use `PTRACE_O_EXITKILL` so the tracee process can't escape
 * Save/restore more state:
    * Full set of x86 registers
