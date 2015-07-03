@@ -35,17 +35,4 @@ gcc $cflags tests/save_restore_tests.cc -o out/save_restore_tests
 ./out/elf_loader ./out/hellow_pie
 ./out/elf_loader ./out/hellow_exec
 
-./out/ptracer ./out/example_loader
-./out/restore
-
-./out/ptracer ./out/elf_loader ./out/example_prog
-./out/restore
-
-./out/ptracer ./out/elf_loader ./out/example_prog2
-./out/restore
-
-./out/ptracer ./out/elf_loader ./out/save_restore_tests
-./out/restore
-
-./out/ptracer ./out/elf_loader /usr/bin/python tests/python_example.py
-./out/restore
+python tests/run_tests.py
