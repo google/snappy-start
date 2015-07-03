@@ -22,7 +22,7 @@ void do_snapshot() {
   raise(SIGUSR1);
 }
 
-void test_munmap() {
+void test_munmap_whole_mapping() {
   // Test munmap() of an entire mapping.
   int size = getpagesize();
   void *addr = mmap(NULL, size, PROT_READ | PROT_WRITE,
@@ -34,7 +34,7 @@ void test_munmap() {
   do_snapshot();
 }
 
-void test_rest() {
+void test_munmap_splits_mapping() {
   // Test munmap() that splits up an existing mapping.
   int size = getpagesize();
   void *addr2 = mmap(NULL, size * 3, PROT_READ | PROT_WRITE,
@@ -45,26 +45,53 @@ void test_rest() {
   int rc = munmap((char *) addr2 + size, size);
   assert(rc == 0);
 
+  do_snapshot();
+
+  assert(((char *) addr2)[0] == 'a');
+  assert(((char *) addr2)[size * 2] == 'b');
+}
+
+void test_mprotect() {
   // Test mprotect() of an entire mapping.
+  int size = getpagesize();
   void *addr3 = mmap(NULL, size, PROT_READ | PROT_WRITE,
                      MAP_PRIVATE | MAP_ANON, -1, 0);
   assert(addr3 != MAP_FAILED);
   *(int *) addr3 = 0x1234;
-  rc = mprotect(addr3, size, PROT_READ);
+  int rc = mprotect(addr3, size, PROT_READ);
   assert(rc == 0);
 
+  do_snapshot();
+
+  assert(*(int *) addr3 == 0x1234);
+}
+
+void test_mmap_fixed_overwrites() {
   // Test overwriting a mapping with MAP_FIXED.
+  int size = getpagesize();
   void *addr4 = mmap(NULL, size, PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0);
   assert(addr4 != MAP_FAILED);
   void *result = mmap(addr4, size, PROT_READ | PROT_WRITE,
                       MAP_PRIVATE | MAP_ANON | MAP_FIXED, -1, 0);
   assert(result == addr4);
 
+  do_snapshot();
+}
+
+void test_brk() {
   // Test that brk() is disabled before taking the snapshot.
   long break_ptr = syscall(__NR_brk, 0);
   assert(break_ptr == -1);
   assert(errno == ENOSYS);
 
+  do_snapshot();
+
+  // Currently brk() works after resuming from the snapshot.
+  long break_ptr_after = syscall(__NR_brk, 0);
+  assert(break_ptr_after != -1);
+}
+
+void test_malloc() {
   // Test malloc(), which we expect will try to use brk().
   int num_blocks = 100;
   char *blocks[num_blocks];
@@ -74,6 +101,15 @@ void test_rest() {
     *(int *) blocks[i] = i * 100;
   }
 
+  do_snapshot();
+
+  // Check that the malloc()'d blocks still work.
+  for (int i = 0; i < num_blocks; ++i) {
+    assert(*(int *) blocks[i] == i * 100);
+  }
+}
+
+void test_vdso_removed_from_auxv() {
   // Test that the auxv's pointers to the VDSO have been removed.
   char **envp_end = environ;
   while (*envp_end)
@@ -85,24 +121,14 @@ void test_rest() {
   }
 
   do_snapshot();
+}
 
-  assert(((char *) addr2)[0] == 'a');
-  assert(((char *) addr2)[size * 2] == 'b');
-
-  assert(*(int *) addr3 == 0x1234);
-
-  // Currently brk() works after resuming from the snapshot.
-  long break_ptr_after = syscall(__NR_brk, 0);
-  assert(break_ptr_after != -1);
-
-  // Check that the malloc()'d blocks still work.
-  for (int i = 0; i < num_blocks; ++i) {
-    assert(*(int *) blocks[i] == i * 100);
-  }
+void test_gettimeofday() {
+  do_snapshot();
 
   // Test gettimeofday(), which we expect will try to use the VDSO.
   struct timeval time;
-  rc = gettimeofday(&time, NULL);
+  int rc = gettimeofday(&time, NULL);
   assert(rc == 0);
 }
 
@@ -113,8 +139,14 @@ struct TestCase {
 
 const TestCase test_cases[] = {
 #define TEST_CASE(NAME) { #NAME, NAME }
-  TEST_CASE(test_munmap),
-  TEST_CASE(test_rest),
+  TEST_CASE(test_munmap_whole_mapping),
+  TEST_CASE(test_munmap_splits_mapping),
+  TEST_CASE(test_mprotect),
+  TEST_CASE(test_mmap_fixed_overwrites),
+  TEST_CASE(test_brk),
+  TEST_CASE(test_malloc),
+  TEST_CASE(test_vdso_removed_from_auxv),
+  TEST_CASE(test_gettimeofday),
 #undef TEST_CASE
 };
 

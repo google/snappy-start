@@ -45,11 +45,6 @@
 * Don't leave the `restore` program mapped at a fixed address
 
 
-## Testing
-
-* Split up save_restore_tests.cc into separate functions
-
-
 ## Features
 
 * Add a tool to examine a snapshot:
