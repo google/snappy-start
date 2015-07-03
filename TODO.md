@@ -15,7 +15,6 @@
 * Initial stack:
    * Ensure the stack is properly aligned
    * Make the stack bigger
-   * Enable the stack guard page
 * Check that various inputs are unchanged at `restore` time:
    * File contents
    * Inode numbers from `stat()` and `fstat()`

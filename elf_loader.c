@@ -591,15 +591,12 @@ uintptr_t do_load(stack_val_t *stack) {
                                        MAP_ANON | MAP_PRIVATE, -1, 0);
   if ((void *) new_stack == MAP_FAILED)
     fail("Error", "Failed to map stack", NULL, 0, NULL, 0);
-  /* TODO: Enable the guard page when restore.cc can handle it. */
-  if (0) {
-    /* Map a guard page. */
-    uintptr_t mapping = my_mmap_simple(new_stack, 0x1000, PROT_NONE,
-                                       MAP_ANON | MAP_PRIVATE | MAP_FIXED,
-                                       -1, 0);
-    if (mapping != new_stack)
-      fail("Error", "Failed to map guard page", NULL, 0, NULL, 0);
-  }
+  /* Map a guard page. */
+  uintptr_t mapping = my_mmap_simple(new_stack, 0x1000, PROT_NONE,
+                                     MAP_ANON | MAP_PRIVATE | MAP_FIXED,
+                                     -1, 0);
+  if (mapping != new_stack)
+    fail("Error", "Failed to map guard page", NULL, 0, NULL, 0);
   uintptr_t stack_alloc = new_stack + stack_size;
 
   /* Copy data to the new stack. */
