@@ -30,8 +30,8 @@ To run the snapshot:
 ./out/restore
 ```
 
-Currently, the program being snapshotted must do `raise(SIGUSR1)` to
-indicate when it has finished starting up and wants to be snapshotted.
+The program will be snapshotted when it first calls an unhandled
+syscall, such as `getpid()`.
 
 Currently, the snapshot data is written to hard-coded files `out_info`
 (containing register state and a list of memory mappings) and `out_pages`

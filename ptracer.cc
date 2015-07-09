@@ -345,6 +345,7 @@ int main(int argc, char **argv) {
           rc = ptrace(PTRACE_SETREGS, pid, 0, &regs);
           assert(rc == 0);
         } else if (regs.orig_rax == (uintptr_t) -1 ||
+                   regs.orig_rax == __NR_getpid ||
                    regs.orig_rax == __NR_mknod) {
           // Unrecognised syscall: trigger snapshotting.
           // TODO: Whitelist syscalls instead of blacklisting these ones.
@@ -365,14 +366,6 @@ int main(int argc, char **argv) {
       // Allow the process to continue until the next syscall entry/exit.
       rc = ptrace(PTRACE_SYSCALL, pid, 0, 0);
       assert(rc == 0);
-    } else if (WSTOPSIG(status) == SIGUSR1) {
-      struct user_regs_struct regs;
-      int rc = ptrace(PTRACE_GETREGS, pid, 0, &regs);
-      assert(rc == 0);
-
-      ptracer.Dump(&regs);
-      ptracer.TerminateSubprocess();
-      break;
     }
   }
   return 0;

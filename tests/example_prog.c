@@ -2,9 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <signal.h>
-
-
 static int my_errno;
 
 #define SYS_ERRNO my_errno
@@ -12,7 +9,8 @@ static int my_errno;
 
 
 void _start() {
-  sys_kill(sys_getpid(), SIGUSR1);
+  // Do unhandled syscall to trigger snapshotting.
+  sys_getpid();
 
   static const char string[] = "In example_prog.c!\n";
   sys_write(1, string, sizeof(string) - 1);
