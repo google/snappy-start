@@ -216,7 +216,7 @@ class Ptracer {
     fwrite(str.c_str(), str.size() + 1, 1, info_fp_);
   }
 
-  void Dump() {
+  void Dump(const struct user_regs_struct *regs) {
     // We don't support restoring FDs yet, so no FDs must be left open.
     assert(fds_.size() == 0);
 
@@ -227,27 +227,24 @@ class Ptracer {
     info_fp_ = fopen("out_info", "w");
     assert(info_fp_);
 
-    struct user_regs_struct regs;
-    int rc = ptrace(PTRACE_GETREGS, pid_, 0, &regs);
-    assert(rc == 0);
-    Put(regs.rax);
-    Put(regs.rcx);
-    Put(regs.rdx);
-    Put(regs.rbx);
-    Put(regs.rsp);
-    Put(regs.rbp);
-    Put(regs.rsi);
-    Put(regs.rdi);
-    Put(regs.r8);
-    Put(regs.r9);
-    Put(regs.r10);
-    Put(regs.r11);
-    Put(regs.r12);
-    Put(regs.r13);
-    Put(regs.r14);
-    Put(regs.r15);
-    Put(regs.rip);
-    Put(regs.eflags);
+    Put(regs->rax);
+    Put(regs->rcx);
+    Put(regs->rdx);
+    Put(regs->rbx);
+    Put(regs->rsp);
+    Put(regs->rbp);
+    Put(regs->rsi);
+    Put(regs->rdi);
+    Put(regs->r8);
+    Put(regs->r9);
+    Put(regs->r10);
+    Put(regs->r11);
+    Put(regs->r12);
+    Put(regs->r13);
+    Put(regs->r14);
+    Put(regs->r15);
+    Put(regs->rip);
+    Put(regs->eflags);
     Put(fs_segment_base_);
 
     Put(mappings_.size());
@@ -347,10 +344,16 @@ int main(int argc, char **argv) {
           regs.orig_rax = -1;
           rc = ptrace(PTRACE_SETREGS, pid, 0, &regs);
           assert(rc == 0);
-        } else if (regs.orig_rax == (uintptr_t) -1) {
+        } else if (regs.orig_rax == (uintptr_t) -1 ||
+                   regs.orig_rax == __NR_mknod) {
           // Unrecognised syscall: trigger snapshotting.
-          // TODO: Whitelist syscalls instead of blacklisting this one.
-          ptracer.Dump();
+          // TODO: Whitelist syscalls instead of blacklisting these ones.
+
+          // Rewind instruction pointer to before the syscall instruction.
+          regs.rip -= 2;
+          regs.rax = regs.orig_rax;
+
+          ptracer.Dump(&regs);
           ptracer.TerminateSubprocess();
           break;
         }
@@ -363,7 +366,11 @@ int main(int argc, char **argv) {
       rc = ptrace(PTRACE_SYSCALL, pid, 0, 0);
       assert(rc == 0);
     } else if (WSTOPSIG(status) == SIGUSR1) {
-      ptracer.Dump();
+      struct user_regs_struct regs;
+      int rc = ptrace(PTRACE_GETREGS, pid, 0, &regs);
+      assert(rc == 0);
+
+      ptracer.Dump(&regs);
       ptracer.TerminateSubprocess();
       break;
     }
