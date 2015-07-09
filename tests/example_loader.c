@@ -14,13 +14,8 @@ static int my_errno;
 extern char code_start[], code_end[];
 asm("code_start:\n"
 
-    // Call getpid()
-    "movl $39, %eax\n"
-    "syscall\n"
-    // Call kill(getpid(), SIGUSR1)
-    "movl %eax, %edi\n" // arg1: result of getpid()
-    "movl $10, %esi\n" // arg2: SIGUSR1
-    "movl $62, %eax\n" // __NR_kill
+    // Do unhandled syscall -1 to trigger snapshotting
+    "movq $-1, %rax\n"
     "syscall\n"
 
     // Call write()

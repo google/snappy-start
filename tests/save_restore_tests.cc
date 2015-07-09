@@ -5,7 +5,6 @@
 #include <assert.h>
 #include <elf.h>
 #include <errno.h>
-#include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,7 +18,10 @@
 namespace {
 
 void do_snapshot() {
-  raise(SIGUSR1);
+  // Do unhandled syscall -1 to trigger snapshotting.
+  int rc = syscall(-1);
+  assert(rc == -1);
+  assert(errno == ENOSYS);
 }
 
 void test_munmap_whole_mapping() {

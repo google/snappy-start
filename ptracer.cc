@@ -347,6 +347,12 @@ int main(int argc, char **argv) {
           regs.orig_rax = -1;
           rc = ptrace(PTRACE_SETREGS, pid, 0, &regs);
           assert(rc == 0);
+        } else if (regs.orig_rax == (uintptr_t) -1) {
+          // Unrecognised syscall: trigger snapshotting.
+          // TODO: Whitelist syscalls instead of blacklisting this one.
+          ptracer.Dump();
+          ptracer.TerminateSubprocess();
+          break;
         }
       } else {
         ptracer.HandleSyscall(&regs);
