@@ -22,6 +22,7 @@
    * x86 segment selector registers (to be nit-picky)
 * Save and replay output to stdout/stderr
 * Ensure `restore`'s temporary mapping does not conflict with restored program
+* Check that syscalls are for the correct architecture (x86-64 not x86-32)
 
 
 ## Usability
