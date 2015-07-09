@@ -140,6 +140,49 @@ class Ptracer {
  public:
   Ptracer(int pid): pid_(pid) {}
 
+  // Returns whether we should allow the syscall to proceed.
+  // Returning false indicates that we should snapshot the process.
+  bool CanHandleSyscall(struct user_regs_struct *regs) {
+    switch (regs->orig_rax) {
+      // These are handled below.
+      case __NR_arch_prctl:
+      case __NR_close:
+      case __NR_mmap:
+      case __NR_mprotect:
+      case __NR_munmap:
+      case __NR_open:
+
+      case __NR_access:
+      case __NR_fstat:
+      case __NR_futex:
+      case __NR_getcwd:
+      case __NR_getdents:
+      case __NR_getegid:
+      case __NR_geteuid:
+      case __NR_getgid:
+      case __NR_getrlimit:
+      case __NR_getuid:
+      case __NR_ioctl:
+      case __NR_lseek:
+      case __NR_lstat:
+      case __NR_pread64:
+      case __NR_read:
+      case __NR_readlink:
+      case __NR_stat:
+      case __NR_uname:
+
+      // TODO: The following will require further handling.
+      case __NR_openat:
+      case __NR_rt_sigaction:
+      case __NR_rt_sigprocmask:
+      case __NR_set_robust_list:
+      case __NR_set_tid_address:
+        return true;
+    }
+    return false;
+  }
+
+  // Handle a syscall after it has executed.
   void HandleSyscall(struct user_regs_struct *regs) {
     uintptr_t sysnum = regs->orig_rax;
     uintptr_t syscall_result = regs->rax;
@@ -344,11 +387,8 @@ int main(int argc, char **argv) {
           regs.orig_rax = -1;
           rc = ptrace(PTRACE_SETREGS, pid, 0, &regs);
           assert(rc == 0);
-        } else if (regs.orig_rax == (uintptr_t) -1 ||
-                   regs.orig_rax == __NR_getpid ||
-                   regs.orig_rax == __NR_mknod) {
+        } else if (!ptracer.CanHandleSyscall(&regs)) {
           // Unrecognised syscall: trigger snapshotting.
-          // TODO: Whitelist syscalls instead of blacklisting these ones.
 
           // Rewind instruction pointer to before the syscall instruction.
           regs.rip -= 2;
