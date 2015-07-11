@@ -52,6 +52,7 @@ class Ptracer {
   std::list<MmapInfo> mappings_;
   std::map<int, std::string> fds_;
   uint64_t fs_segment_base_;
+  uintptr_t tid_address_;
   FILE *info_fp_;
 
   uintptr_t ReadWord(uintptr_t addr) {
@@ -138,7 +139,7 @@ class Ptracer {
   }
 
  public:
-  Ptracer(int pid): pid_(pid) {}
+  Ptracer(int pid): pid_(pid), fs_segment_base_(0), tid_address_(0) {}
 
   // Returns whether we should allow the syscall to proceed.
   // Returning false indicates that we should snapshot the process.
@@ -151,6 +152,7 @@ class Ptracer {
       case __NR_mprotect:
       case __NR_munmap:
       case __NR_open:
+      case __NR_set_tid_address:
 
       case __NR_access:
       case __NR_fstat:
@@ -176,7 +178,6 @@ class Ptracer {
       case __NR_rt_sigaction:
       case __NR_rt_sigprocmask:
       case __NR_set_robust_list:
-      case __NR_set_tid_address:
         return true;
     }
     return false;
@@ -247,6 +248,10 @@ class Ptracer {
         }
         break;
       }
+      case __NR_set_tid_address: {
+        tid_address_ = arg1;
+        break;
+      }
     }
   }
 
@@ -289,6 +294,7 @@ class Ptracer {
     Put(regs->rip);
     Put(regs->eflags);
     Put(fs_segment_base_);
+    Put(tid_address_);
 
     Put(mappings_.size());
     for (auto &map : mappings_) {

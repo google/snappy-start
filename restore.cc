@@ -14,6 +14,9 @@ static int my_errno;
 #define SYS_ERRNO my_errno
 #include "linux_syscall_support.h"
 
+// Define a syscall that is missing from linux_syscall_support.h.
+_syscall1(long, set_tid_address, uintptr_t, tid_address);
+
 
 #define TO_STRING_1(x) #x
 #define TO_STRING(x) TO_STRING_1(x)
@@ -141,6 +144,7 @@ extern "C" void _start() {
   regs.rip = reader.Get();
   regs.flags = reader.Get();
   uint64_t fs_segment_base = reader.Get();
+  uintptr_t tid_address = reader.Get();
 
   int mapping_count = reader.Get();
   for (int i = 0; i < mapping_count; i++) {
@@ -178,6 +182,9 @@ extern "C" void _start() {
 
   rc = sys_arch_prctl(ARCH_SET_FS, (void *) fs_segment_base);
   assert(rc == 0);
+
+  rc = sys_set_tid_address(tid_address);
+  assert(rc >= 0);
 
   RestoreRegs(&regs);
   // Should not reach here.

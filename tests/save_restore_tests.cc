@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <elf.h>
 #include <errno.h>
+#include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -174,6 +175,30 @@ void test_gettimeofday() {
   assert(rc == 0);
 }
 
+void *thread_func(void *thread_arg) {
+  pthread_t tid = (pthread_t) thread_arg;
+  void *result;
+  int rc = pthread_join(tid, &result);
+  assert(rc == 0);
+  assert(result == (void *) 0x2345);
+  exit(0);
+  return NULL;
+}
+
+// Test joining the initial thread (from a new thread).  To do this,
+// the initial thread must exit.
+//
+// This tests that the TID address -- as set by the set_tid_address()
+// syscall -- is restored correctly for the initial thread.
+void test_set_tid_address() {
+  do_snapshot();
+
+  pthread_t tid;
+  int rc = pthread_create(&tid, NULL, thread_func, (void *) pthread_self());
+  assert(rc == 0);
+  pthread_exit((void *) 0x2345);
+}
+
 struct TestCase {
   const char *test_name;
   void (*test_func)();
@@ -191,6 +216,7 @@ const TestCase test_cases[] = {
   TEST_CASE(test_malloc),
   TEST_CASE(test_vdso_removed_from_auxv),
   TEST_CASE(test_gettimeofday),
+  TEST_CASE(test_set_tid_address),
 #undef TEST_CASE
 };
 
