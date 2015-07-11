@@ -3,8 +3,6 @@
 
 ## Completeness/correctness
 
-* Whitelist syscalls
-   * Create snapshot on first unhandled syscall (e.g. `getpid()`)
 * Use `PTRACE_O_EXITKILL` so the tracee process can't escape
 * Save/restore more state:
    * Full set of x86 registers
