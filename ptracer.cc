@@ -33,6 +33,24 @@ uintptr_t RoundUpPageSize(uintptr_t val) {
   return (val + page_size - 1) & ~(page_size - 1);
 }
 
+class SyscallParams {
+ public:
+  SyscallParams(const struct user_regs_struct *regs) {
+    sysnum = regs->orig_rax;
+    result = regs->rax;
+    args[0] = regs->rdi;
+    args[1] = regs->rsi;
+    args[2] = regs->rdx;
+    args[3] = regs->r10;
+    args[4] = regs->r8;
+    args[5] = regs->r9;
+  }
+
+  uintptr_t sysnum;
+  uintptr_t args[6];
+  uintptr_t result;
+};
+
 class MmapInfo {
  public:
   uintptr_t addr;
@@ -185,35 +203,28 @@ class Ptracer {
 
   // Handle a syscall after it has executed.
   void HandleSyscall(struct user_regs_struct *regs) {
-    uintptr_t sysnum = regs->orig_rax;
-    uintptr_t syscall_result = regs->rax;
-    uintptr_t arg1 = regs->rdi;
-    uintptr_t arg2 = regs->rsi;
-    uintptr_t arg3 = regs->rdx;
-    // uintptr_t arg4 = regs->r10;
-    uintptr_t arg5 = regs->r8;
-    uintptr_t arg6 = regs->r9;
+    SyscallParams params(regs);
 
-    if (syscall_result > -(uintptr_t) 0x1000) {
+    if (params.result > -(uintptr_t) 0x1000) {
       // Syscall returned an error so should have had no effect.
       return;
     }
 
-    switch (sysnum) {
+    switch (params.sysnum) {
       case __NR_open: {
-        std::string filename(ReadString(arg1));
-        int fd_result = syscall_result;
+        std::string filename(ReadString(params.args[0]));
+        int fd_result = params.result;
         if (fd_result >= 0)
           fds_[fd_result] = filename;
         break;
       }
       case __NR_close: {
-        fds_.erase(arg1);
+        fds_.erase(params.args[0]);
         break;
       }
       case __NR_mmap: {
-        uintptr_t addr = syscall_result;
-        size_t size = RoundUpPageSize(arg2);
+        uintptr_t addr = params.result;
+        size_t size = RoundUpPageSize(params.args[1]);
         assert(addr + size >= addr);
         // Record overwriting of any existing mappings in this range
         // in case this mmap() call uses MAP_FIXED.
@@ -222,34 +233,34 @@ class Ptracer {
         MmapInfo map;
         map.addr = addr;
         map.size = size;
-        map.prot = arg3;
+        map.prot = params.args[2];
         map.max_prot = map.prot;
         // assert(arg4 == (MAP_ANON | MAP_PRIVATE));
-        int fd_arg = arg5;
+        int fd_arg = params.args[4];
         if (fd_arg != -1) {
           assert(fds_.find(fd_arg) != fds_.end());
           map.filename = fds_[fd_arg];
         }
-        map.file_offset = arg6;
+        map.file_offset = params.args[5];
         mappings_.push_back(map);
         break;
       }
       case __NR_munmap: {
-        HandleMunmap(arg1, arg2);
+        HandleMunmap(params.args[0], params.args[1]);
         break;
       }
       case __NR_mprotect: {
-        HandleMprotect(arg1, arg2, arg3);
+        HandleMprotect(params.args[0], params.args[1], params.args[2]);
         break;
       }
       case __NR_arch_prctl: {
-        if (arg1 == ARCH_SET_FS) {
-          fs_segment_base_ = arg2;
+        if (params.args[0] == ARCH_SET_FS) {
+          fs_segment_base_ = params.args[1];
         }
         break;
       }
       case __NR_set_tid_address: {
-        tid_address_ = arg1;
+        tid_address_ = params.args[0];
         break;
       }
     }
