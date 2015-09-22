@@ -48,7 +48,10 @@ def Main():
   test_names = stdout.strip().split('\n')
 
   for test_name in test_names:
-    RunTest(['./out/save_restore_tests', test_name], -1)
+    sysnum = -1
+    if test_name == 'test_mknod_not_whitelisted':
+      sysnum = __NR_mknod
+    RunTest(['./out/save_restore_tests', test_name], sysnum)
 
   RunTest(['/usr/bin/python', 'tests/python_example.py'], __NR_mknod)
 

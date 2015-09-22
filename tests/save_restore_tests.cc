@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <sys/syscall.h>
 #include <sys/time.h>
 #include <unistd.h>
@@ -23,6 +24,13 @@ void do_snapshot() {
   int rc = syscall(-1);
   assert(rc == -1);
   assert(errno == ENOSYS);
+}
+
+void test_mknod_not_whitelisted() {
+  // Test that mknod() (as an example) is not whitelisted.
+  int rc = mknod("", 0600, S_IFREG);
+  assert(rc == -1);
+  assert(errno == ENOENT);
 }
 
 void test_munmap_whole_mapping() {
@@ -206,6 +214,7 @@ struct TestCase {
 
 const TestCase test_cases[] = {
 #define TEST_CASE(NAME) { #NAME, NAME }
+  TEST_CASE(test_mknod_not_whitelisted),
   TEST_CASE(test_munmap_whole_mapping),
   TEST_CASE(test_munmap_splits_mapping),
   TEST_CASE(test_mprotect),
