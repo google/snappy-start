@@ -114,7 +114,7 @@ void RestoreRegs(struct RegsToRestore *regs) {
       "popq %%r14\n"
       "popq %%r15\n"
       "iretq\n"
-      : : "r"(regs));
+      : : "r"(regs) : "memory");
 }
 
 }
