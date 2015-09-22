@@ -111,6 +111,13 @@ void test_mmap_prot_none() {
   check_addr_is_reserved(addr);
 }
 
+void test_mmap_map_shared() {
+  // MAP_SHARED is currently not allowed before snapshotting.
+  void *addr = mmap(NULL, getpagesize(), PROT_READ | PROT_WRITE,
+                    MAP_SHARED | MAP_ANON, -1, 0);
+  assert(addr != MAP_FAILED);
+}
+
 void test_many_mappings() {
   // Test that we can handle a large number of mappings.
   int page_size = getpagesize();
@@ -220,6 +227,7 @@ const TestCase test_cases[] = {
   TEST_CASE(test_mprotect),
   TEST_CASE(test_mmap_fixed_overwrites),
   TEST_CASE(test_mmap_prot_none),
+  TEST_CASE(test_mmap_map_shared),
   TEST_CASE(test_many_mappings),
   TEST_CASE(test_brk),
   TEST_CASE(test_malloc),

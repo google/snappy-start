@@ -162,11 +162,20 @@ class Ptracer {
   // Returns whether we should allow the syscall to proceed.
   // Returning false indicates that we should snapshot the process.
   bool CanHandleSyscall(struct user_regs_struct *regs) {
-    switch (regs->orig_rax) {
-      // These are handled below.
+    SyscallParams params(regs);
+
+    switch (params.sysnum) {
       case __NR_arch_prctl:
+        return params.args[0] == ARCH_SET_FS;
+
+      case __NR_mmap: {
+        // TODO: Be stricter about which flags we allow.
+        uintptr_t flags = params.args[3];
+        return (flags & MAP_SHARED) == 0;
+      }
+
+      // These are handled below.
       case __NR_close:
-      case __NR_mmap:
       case __NR_mprotect:
       case __NR_munmap:
       case __NR_open:

@@ -6,6 +6,7 @@ import struct
 import subprocess
 
 
+__NR_mmap = 9
 __NR_getpid = 39
 __NR_mknod = 133
 
@@ -47,11 +48,13 @@ def Main():
   stdout = proc.communicate()[0]
   test_names = stdout.strip().split('\n')
 
+  sysnum_for_test = {
+    'test_mknod_not_whitelisted': __NR_mknod,
+    'test_mmap_map_shared': __NR_mmap,
+  }
   for test_name in test_names:
-    sysnum = -1
-    if test_name == 'test_mknod_not_whitelisted':
-      sysnum = __NR_mknod
-    RunTest(['./out/save_restore_tests', test_name], sysnum)
+    RunTest(['./out/save_restore_tests', test_name],
+            sysnum_for_test.get(test_name, -1))
 
   RunTest(['/usr/bin/python', 'tests/python_example.py'], __NR_mknod)
 
