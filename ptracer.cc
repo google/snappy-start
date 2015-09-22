@@ -4,6 +4,7 @@
 
 #include <asm/prctl.h>
 #include <assert.h>
+#include <fcntl.h>
 #include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -174,11 +175,17 @@ class Ptracer {
         return (flags & MAP_SHARED) == 0;
       }
 
+      case __NR_open: {
+        uintptr_t flags = params.args[1];
+        uintptr_t allowed_flags = O_ACCMODE | O_CLOEXEC;
+        return (flags & O_ACCMODE) == O_RDONLY &&
+               (flags & ~allowed_flags) == 0;
+      }
+
       // These are handled below.
       case __NR_close:
       case __NR_mprotect:
       case __NR_munmap:
-      case __NR_open:
       case __NR_set_tid_address:
 
       case __NR_access:
