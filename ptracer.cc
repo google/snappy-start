@@ -251,7 +251,6 @@ class Ptracer {
         map.size = size;
         map.prot = params.args[2];
         map.max_prot = map.prot;
-        // assert(arg4 == (MAP_ANON | MAP_PRIVATE));
         int fd_arg = params.args[4];
         if (fd_arg != -1) {
           assert(fds_.find(fd_arg) != fds_.end());
